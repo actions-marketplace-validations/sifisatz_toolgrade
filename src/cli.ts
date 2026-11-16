@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-import { mkdir, readFile, writeFile } from "node:fs/promises";
-import { join } from "node:path";
+import { access, mkdir, readFile, writeFile } from "node:fs/promises";
+import { basename, dirname, join, relative, resolve } from "node:path";
 import { Command, InvalidArgumentError } from "commander";
 import { compareRuns } from "./compare.js";
 import { loadSuite } from "./config.js";
+import { generateSuite, type InitServer } from "./init.js";
 import { lintTools } from "./lint.js";
 import { openSession } from "./mcp.js";
 import { AnthropicProvider } from "./providers/anthropic.js";
@@ -102,6 +103,33 @@ program
   });
 
 program
+  .command("init")
+  .description("connect to a server, read its tools and write a starter suite (e.g. toolgrade init -- node dist/server.js)")
+  .argument("[command...]", "command that starts a stdio server; put it after --")
+  .option("--url <url>", "connect to a Streamable HTTP server instead")
+  .option("-o, --out <file>", "suite file to write", "toolgrade.yaml")
+  .option("--name <name>", "suite name", basename(process.cwd()))
+  .option("--force", "overwrite an existing suite file")
+  .action(async (command: string[], o) => {
+    if (!o.url && command.length === 0) throw new InvalidArgumentError("give a server command after -- or --url");
+    if (!o.force && (await exists(o.out))) throw new InvalidArgumentError(`${o.out} exists; pass --force to overwrite`);
+    const outDir = dirname(resolve(o.out));
+    const [cmd, ...args] = command;
+    const server: InitServer = o.url
+      ? { url: o.url }
+      : { command: cmd!, args, cwd: relative(outDir, process.cwd()) || "." };
+    const session = await openSession(o.url ? { url: o.url, headers: {} } : { command: cmd!, args, cwd: process.cwd(), env: {} });
+    try {
+      await writeFile(o.out, generateSuite(o.name, server, session.tools));
+      console.log(`Wrote ${o.out}: ${session.tools.length} tool task(s) + 1 control task.`);
+      console.log(formatLint(lintTools(session.tools), session.tools.length));
+      console.log(`\nNext: replace the TODO prompts and rubrics, then: toolgrade run ${o.out}`);
+    } finally {
+      await session.close();
+    }
+  });
+
+program
   .command("compare")
   .description("compare two run reports and flag statistically significant regressions")
   .argument("<before>", "earlier run report JSON")
@@ -117,6 +145,8 @@ function makeProvider(o: { provider: string; baseUrl: string; apiKeyEnv: string 
   if (o.provider === "openai") return new OpenAICompatibleProvider({ baseUrl: o.baseUrl, apiKey: process.env[o.apiKeyEnv] });
   throw new InvalidArgumentError(`unknown provider "${o.provider}" (use anthropic or openai)`);
 }
+
+const exists = (path: string) => access(path).then(() => true, () => false);
 
 async function readReport(path: string): Promise<RunReport> {
   const report = JSON.parse(await readFile(path, "utf8")) as RunReport;

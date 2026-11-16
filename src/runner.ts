@@ -1,6 +1,7 @@
 import { AgentRunError, runAgent, toAnthropicTools, type Trajectory, type Usage } from "./agent.js";
 import { evaluateAll, type AssertionResult } from "./assertions.js";
 import { isOutcomeAssertion, type AssertionSpec, type Suite, type TaskSpec } from "./config.js";
+import { todoTasks } from "./init.js";
 import { LlmJudge } from "./judge.js";
 import { openSession as defaultOpenSession, type McpSession } from "./mcp.js";
 import { CostModel } from "./pricing.js";
@@ -106,6 +107,8 @@ export async function runSuite(suite: Suite, opts: RunOptions): Promise<RunRepor
   const trials = opts.trials ?? suite.run.trials;
   const withBaseline = opts.baseline ?? suite.run.baseline;
   const tasks = selectTasks(suite.tasks, opts.filter);
+  const unfinished = todoTasks(tasks);
+  if (unfinished.length) throw new Error(`Suite still has TODO placeholders in: ${unfinished.join(", ")} - write real prompts and rubrics first`);
   const costs = new CostModel(suite.pricing);
   const judge = new LlmJudge(opts.provider, suite.judge.model);
   let judgeIn = 0;
