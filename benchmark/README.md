@@ -33,6 +33,24 @@ Versions are pinned in [package.json](package.json); suites are in [suites/](sui
   reference solution for every task against the real pinned server (it must pass) and the
   untouched starting state (it must fail), so no check can pass vacuously.
 
+## What failed, and why (v0, qwen3:8b)
+
+Read from the trial trajectories in `results/2026-11-16-qwen3-8b/`:
+
+- **memory / recall-lead - 0/3.** Every trial called `search_nodes` with `observationLimit: 0`,
+  which omits each entity's observations. The model found the project lead but never saw
+  "Ships in December" and reported that no ship date exists. Optional parameters that silently
+  drop data invite small models to suppress exactly what they need.
+- **filesystem / top-region - 0/3.** The model invented a filename (`Q3_revenue_report.txt`),
+  searched for its own guess and gave up, never listing the directory where `reports/q3.csv` sat.
+- **filesystem / append-todo - 1/3.** One trial appended to an invented `notes/todo.md` and
+  reported success; another used a made-up `/project/...` path the server refused. The passing
+  trial overwrote the whole file before rebuilding it.
+
+- **sequential-thinking - no lift.** All five reasoning problems passed 3/3 with and without the
+  tool. The model still called it ~0.7 times per task, and once used it for 17 * 23 (right answer,
+  but the control task allows no tool calls). On these problems it added cost, not accuracy.
+
 ## Limitations - read before quoting a number
 
 - A score belongs to **server + model + task set**, never to the server alone. v0 uses one

@@ -1,5 +1,6 @@
 import {
   ArrowRight,
+  CircleAlert,
   FlaskConical,
   GitBranch,
   TriangleAlert,
@@ -12,6 +13,7 @@ import { Footer } from "@/components/marketing/sections";
 import { Lift, SignificanceBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
 import data from "@/data/benchmark.json";
+import { FINDINGS } from "@/data/benchmark-findings";
 import { pct, signedPct } from "@/lib/format";
 import { REPO_URL } from "@/lib/site";
 
@@ -254,6 +256,50 @@ export default function BenchmarkPage() {
                     {e.errors > 0 && ` - ${e.errors} trial(s) errored`}
                   </div>
                 </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        {FINDINGS.length > 0 && (
+          <section
+            id="findings"
+            className="mx-auto max-w-6xl scroll-mt-20 px-6 py-16"
+          >
+            <h2 className="text-2xl font-semibold tracking-tight">
+              What failed, and why
+            </h2>
+            <p className="mt-1 max-w-2xl text-sm text-muted-foreground">
+              Read from the trial trajectories - the part a pass rate alone
+              cannot tell you, and the part most useful to server authors.
+            </p>
+            <div className="mt-8 grid gap-4 md:grid-cols-2">
+              {FINDINGS.map((f) => (
+                <article
+                  key={`${f.server}-${f.task}`}
+                  className="reveal flex flex-col rounded-2xl border bg-card p-5"
+                >
+                  <div className="flex items-center justify-between gap-2 text-xs">
+                    <span className="font-mono text-muted-foreground">
+                      {f.server} / {f.task}
+                    </span>
+                    <span className="inline-flex items-center gap-1 rounded-full border border-status-critical/30 bg-status-critical/10 px-2 py-0.5 font-medium">
+                      <CircleAlert
+                        className="size-3 text-status-critical"
+                        aria-hidden
+                      />{" "}
+                      {f.score}
+                    </span>
+                  </div>
+                  <h3 className="mt-3 font-semibold">{f.title}</h3>
+                  <p className="mt-2 text-sm text-muted-foreground">
+                    {f.observed}
+                  </p>
+                  <p className="mt-auto border-t pt-3 text-sm">
+                    <span className="font-medium">For server authors: </span>
+                    <span className="text-muted-foreground">{f.lesson}</span>
+                  </p>
+                </article>
               ))}
             </div>
           </section>
