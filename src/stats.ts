@@ -1,0 +1,47 @@
+const Z95 = 1.959964;
+
+export interface Interval {
+  low: number;
+  high: number;
+}
+
+export interface Rate extends Interval {
+  passes: number;
+  n: number;
+  rate: number;
+}
+
+/** Wilson score interval: well behaved at small n and at 0% / 100%, unlike the normal approximation. */
+export function wilson(passes: number, n: number, z = Z95): Interval {
+  if (n === 0) return { low: 0, high: 1 };
+  const p = passes / n;
+  const z2 = z * z;
+  const denom = 1 + z2 / n;
+  const center = (p + z2 / (2 * n)) / denom;
+  const half = (z * Math.sqrt((p * (1 - p)) / n + z2 / (4 * n * n))) / denom;
+  return { low: Math.max(0, center - half), high: Math.min(1, center + half) };
+}
+
+export function rate(passes: number, n: number): Rate {
+  return { passes, n, rate: n === 0 ? 0 : passes / n, ...wilson(passes, n) };
+}
+
+export interface Difference extends Interval {
+  delta: number;
+}
+
+/** Newcombe hybrid score interval for p1 - p2 (method 10), built from the two Wilson intervals. */
+export function difference(a: Rate, b: Rate): Difference {
+  const delta = a.rate - b.rate;
+  const low = delta - Math.sqrt((a.rate - a.low) ** 2 + (b.high - b.rate) ** 2);
+  const high = delta + Math.sqrt((a.high - a.rate) ** 2 + (b.rate - b.low) ** 2);
+  return { delta, low: Math.max(-1, low), high: Math.min(1, high) };
+}
+
+export type Significance = "better" | "worse" | "not_significant";
+
+export function significance(d: Difference): Significance {
+  if (d.low > 0) return "better";
+  if (d.high < 0) return "worse";
+  return "not_significant";
+}

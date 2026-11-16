@@ -1,0 +1,11 @@
+export { runAgent, type Trajectory, type ToolCallRecord } from "./agent.js";
+export { compareRuns, type Comparison } from "./compare.js";
+export { loadSuite, parseSuite, type Suite, type TaskSpec, type AssertionSpec } from "./config.js";
+export { lintTools, type LintIssue } from "./lint.js";
+export { openSession, type McpSession, type McpTool } from "./mcp.js";
+export { AnthropicProvider } from "./providers/anthropic.js";
+export { ScriptedProvider, type Script, type ScriptedReply } from "./providers/scripted.js";
+export type { ModelProvider, TurnRequest, TurnResponse } from "./providers/types.js";
+export { formatMarkdown, formatTerminal } from "./report.js";
+export { runSuite, FatalRunError, type RunReport, type RunOptions, type TrialResult } from "./runner.js";
+export { difference, rate, significance, wilson } from "./stats.js";

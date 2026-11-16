@@ -1,0 +1,118 @@
+import pc from "picocolors";
+import type { Comparison } from "./compare.js";
+import type { LintIssue } from "./lint.js";
+import { pct, signedPct, type ArmSummary, type RunReport } from "./runner.js";
+import type { Difference, Rate } from "./stats.js";
+
+const ci = (r: Rate) => `${pct(r.low)}-${pct(r.high)}`;
+const ciDiff = (d: Difference) => `${signedPct(d.low)}..${signedPct(d.high)}`;
+const usd = (v: number | null) => (v === null ? "n/a" : `$${v.toFixed(v < 1 ? 4 : 2)}`);
+const rateCell = (a: ArmSummary) => `${pct(a.rate.rate)} (${a.rate.passes}/${a.rate.n})`;
+
+export function formatTerminal(r: RunReport): string {
+  const lines: string[] = [];
+  lines.push("");
+  lines.push(pc.bold(`ToolGrade - ${r.suite}`));
+  lines.push(pc.dim(`agent ${r.agentModel} | judge ${r.judgeModel} | ${r.trialsPerTask} trial(s)/task | ${r.toolSurface.count} tools (~${r.toolSurface.approxTokens} tokens of schema)`));
+  lines.push("");
+
+  const header = ["task", "with tools", "baseline", "lift", "calls", "cost"];
+  const rows = r.tasks.map((t) => [
+    t.taskId,
+    colorRate(t.tools.rate.rate, rateCell(t.tools)),
+    t.baseline ? rateCell(t.baseline) : "-",
+    t.lift ? colorLift(t.lift.delta, signedPct(t.lift.delta)) : "-",
+    t.tools.meanToolCalls.toFixed(1),
+    usd(t.tools.costUsd),
+  ]);
+  lines.push(...table([header.map((h) => pc.bold(h)), ...rows]));
+  lines.push("");
+
+  const o = r.overall;
+  lines.push(`${pc.bold("Pass rate (tools)")}  ${colorRate(o.tools.rate.rate, pct(o.tools.rate.rate))}  95% CI ${ci(o.tools.rate)}`);
+  if (o.baseline && o.lift) {
+    lines.push(`${pc.bold("Pass rate (none) ")}  ${pct(o.baseline.rate.rate)}  95% CI ${ci(o.baseline.rate)}`);
+    const sig = o.liftSignificance === "better" ? pc.green("significant") : o.liftSignificance === "worse" ? pc.red("significantly worse") : pc.yellow("not significant - add trials");
+    lines.push(`${pc.bold("Lift             ")}  ${colorLift(o.lift.delta, signedPct(o.lift.delta))}  95% CI ${ciDiff(o.lift)}  ${sig}`);
+  }
+  lines.push(`${pc.bold("Cost             ")}  ${usd(r.totalCostUsd)} total (judge ${usd(r.judgeCostUsd)})`);
+  if (r.unpricedModels.length) lines.push(pc.yellow(`No price for: ${r.unpricedModels.join(", ")} - add them under pricing: in the suite`));
+
+  const failures = r.trials.filter((t) => !t.passed && t.arm === "tools").slice(0, 8);
+  if (failures.length) {
+    lines.push("");
+    lines.push(pc.bold("Failures (with tools)"));
+    for (const f of failures) {
+      const why = f.error ?? (f.trajectory?.truncated ? "hit max_turns" : f.assertions.filter((a) => !a.passed).map((a) => `${a.type}: ${a.detail}`).join("; "));
+      lines.push(`  ${pc.red("x")} ${f.taskId}#${f.trial}  ${pc.dim(why)}`);
+    }
+  }
+
+  lines.push("");
+  for (const c of r.gate.checks) lines.push(`${c.passed ? pc.green("PASS") : pc.red("FAIL")} ${c.name}: ${c.detail}`);
+  lines.push(r.gate.passed ? pc.green(pc.bold("Gate passed")) : pc.red(pc.bold("Gate failed")));
+  return lines.join("\n");
+}
+
+export function formatMarkdown(r: RunReport, cmp?: Comparison): string {
+  const o = r.overall;
+  const out: string[] = [];
+  out.push(`## ToolGrade: ${r.suite} - ${r.gate.passed ? "passed" : "FAILED"}`);
+  out.push("");
+  out.push(`Agent \`${r.agentModel}\`, judge \`${r.judgeModel}\`, ${r.trialsPerTask} trial(s) per task, ${r.toolSurface.count} tools (~${r.toolSurface.approxTokens} schema tokens).`);
+  out.push("");
+  out.push("| | Pass rate | 95% CI |");
+  out.push("|---|---|---|");
+  out.push(`| With tools | ${pct(o.tools.rate.rate)} | ${ci(o.tools.rate)} |`);
+  if (o.baseline && o.lift) {
+    out.push(`| No tools (baseline) | ${pct(o.baseline.rate.rate)} | ${ci(o.baseline.rate)} |`);
+    out.push(`| **Lift** | **${signedPct(o.lift.delta)}** | ${ciDiff(o.lift)} (${o.liftSignificance?.replace("_", " ")}) |`);
+  }
+  out.push("");
+  out.push("| Task | With tools | Baseline | Lift | Mean tool calls |");
+  out.push("|---|---|---|---|---|");
+  for (const t of r.tasks) {
+    out.push(`| \`${t.taskId}\` | ${rateCell(t.tools)} | ${t.baseline ? rateCell(t.baseline) : "-"} | ${t.lift ? signedPct(t.lift.delta) : "-"} | ${t.tools.meanToolCalls.toFixed(1)} |`);
+  }
+  if (cmp) {
+    out.push("");
+    out.push(`### Versus previous run: ${cmp.verdict.replaceAll("_", " ")}`);
+    out.push(`Pass rate ${pct(cmp.overall.before)} -> ${pct(cmp.overall.after)} (${signedPct(cmp.overall.diff.delta)}, 95% CI ${ciDiff(cmp.overall.diff)}).`);
+    const moved = cmp.tasks.filter((t) => t.significance !== "not_significant");
+    for (const t of moved) out.push(`- \`${t.taskId}\`: ${pct(t.before)} -> ${pct(t.after)} (${t.significance})`);
+  }
+  out.push("");
+  out.push(`Cost: ${usd(r.totalCostUsd)}. Gate: ${r.gate.checks.map((c) => `${c.name} ${c.passed ? "ok" : "FAILED"}`).join(", ")}.`);
+  return out.join("\n");
+}
+
+export function formatComparison(cmp: Comparison): string {
+  const lines = [pc.bold(`Comparison: ${cmp.verdict.replaceAll("_", " ")}`)];
+  lines.push(`overall ${pct(cmp.overall.before)} -> ${pct(cmp.overall.after)}  ${signedPct(cmp.overall.diff.delta)}  95% CI ${ciDiff(cmp.overall.diff)}`);
+  for (const t of cmp.tasks) {
+    const tag = t.significance === "worse" ? pc.red("worse") : t.significance === "better" ? pc.green("better") : pc.dim("~");
+    lines.push(`  ${t.taskId.padEnd(28)} ${pct(t.before).padStart(4)} -> ${pct(t.after).padStart(4)}  ${tag}`);
+  }
+  if (cmp.unmatched.length) lines.push(pc.yellow(`not in both runs: ${cmp.unmatched.join(", ")}`));
+  return lines.join("\n");
+}
+
+export function formatLint(issues: LintIssue[], toolCount: number): string {
+  if (issues.length === 0) return pc.green(`${toolCount} tools, no lint issues`);
+  return issues.map((i) => `${i.level === "error" ? pc.red("error") : pc.yellow("warn ")} ${i.tool}: ${i.message}`).join("\n");
+}
+
+function colorRate(rate: number, text: string): string {
+  return rate >= 0.8 ? pc.green(text) : rate >= 0.5 ? pc.yellow(text) : pc.red(text);
+}
+
+function colorLift(delta: number, text: string): string {
+  return delta > 0 ? pc.green(text) : delta < 0 ? pc.red(text) : pc.dim(text);
+}
+
+// Pads on visible width so ANSI colour codes do not break alignment.
+function table(rows: string[][]): string[] {
+  const visible = (s: string) => s.replace(/\x1b\[[0-9;]*m/g, "").length;
+  const widths = rows[0]!.map((_, i) => Math.max(...rows.map((r) => visible(r[i] ?? ""))));
+  return rows.map((r) => r.map((cell, i) => cell + " ".repeat(widths[i]! - visible(cell))).join("  "));
+}

@@ -1,0 +1,6 @@
+node_modules/
+dist/
+.toolgrade/
+.scratch/
+*.log
+.env

@@ -1,0 +1,45 @@
+name: ToolGrade
+description: Eval-first quality gate for MCP servers - fails the build when your tools stop beating a no-tool baseline.
+inputs:
+  suite:
+    description: Path to the suite YAML file
+    required: true
+  trials:
+    description: Trials per task per arm (overrides the suite)
+    required: false
+    default: ""
+  compare:
+    description: Previous run report JSON to compare against; a significant regression fails the job
+    required: false
+    default: ""
+  version:
+    description: toolgrade npm version
+    required: false
+    default: latest
+outputs:
+  report:
+    description: Path to the JSON run report
+    value: .toolgrade/runs/latest.json
+  markdown:
+    description: Path to the Markdown summary, suitable for a PR comment
+    value: .toolgrade/summary.md
+runs:
+  using: composite
+  steps:
+    - name: Run toolgrade
+      shell: bash
+      env:
+        TG_SUITE: ${{ inputs.suite }}
+        TG_TRIALS: ${{ inputs.trials }}
+        TG_COMPARE: ${{ inputs.compare }}
+        TG_VERSION: ${{ inputs.version }}
+      run: |
+        args=(run "$TG_SUITE" --markdown .toolgrade/summary.md)
+        [ -n "$TG_TRIALS" ] && args+=(--trials "$TG_TRIALS")
+        [ -n "$TG_COMPARE" ] && args+=(--compare "$TG_COMPARE")
+        mkdir -p .toolgrade
+        set +e
+        npx --yes "toolgrade@$TG_VERSION" "${args[@]}"
+        code=$?
+        [ -f .toolgrade/summary.md ] && cat .toolgrade/summary.md >> "$GITHUB_STEP_SUMMARY"
+        exit $code

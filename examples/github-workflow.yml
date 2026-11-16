@@ -1,0 +1,36 @@
+# Copy to .github/workflows/toolgrade.yml in the repository that ships your MCP server.
+name: MCP tool quality
+on:
+  pull_request:
+    paths: ["src/**", "evals/**"]
+
+jobs:
+  toolgrade:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm ci
+
+      # Baseline report from the default branch, if a previous run uploaded one.
+      - uses: dawidd6/action-download-artifact@v6
+        continue-on-error: true
+        with:
+          branch: main
+          name: toolgrade-report
+          path: previous
+
+      - uses: toolgrade/toolgrade@v0
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+        with:
+          suite: evals/suite.yaml
+          compare: ${{ hashFiles('previous/latest.json') != '' && 'previous/latest.json' || '' }}
+
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: toolgrade-report
+          path: .toolgrade/runs/latest.json

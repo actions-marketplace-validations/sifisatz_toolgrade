@@ -1,0 +1,92 @@
+# Example suite: does the notes MCP server make an agent better than no tools at all?
+# Run:            npx toolgrade run examples/notes-suite.yaml
+# Degraded tools: NOTES_SERVER_VAGUE=1 in server.env below, then compare the two run reports.
+name: notes-server
+
+server:
+  command: node
+  args: [--import, tsx, server.ts]
+  cwd: notes-server
+  env:
+    NOTES_SERVER_VAGUE: "0"
+
+agent:
+  model: claude-opus-5
+  max_turns: 8
+  effort: medium
+
+judge:
+  model: claude-sonnet-5
+
+run:
+  trials: 3
+  baseline: true
+  concurrency: 4
+
+gate:
+  min_pass_rate: 0.8   # with-tools pass rate across all trials
+  min_lift: 0.3        # with-tools minus no-tools, in pass-rate points
+
+tasks:
+  - id: find-owner
+    tags: [read]
+    prompt: Who owns our Q3 planning note? Answer with the person's full name.
+    assert:
+      - type: output_contains
+        value: Dana Reyes
+      - type: tool_called
+        name: search_notes
+
+  - id: incident-root-cause
+    tags: [read]
+    prompt: What was the root cause of the October 2nd incident?
+    assert:
+      - type: output_contains
+        value: [TLS, certificate]
+        mode: any
+      - type: max_tool_calls
+        value: 4
+
+  - id: create-note
+    tags: [write]
+    prompt: "Create a note titled 'Offsite agenda' with the body 'Day 1: roadmap. Day 2: hackathon.' and tag it offsite."
+    assert:
+      - type: tool_called
+        name: create_note
+        max_times: 1
+        args_contains: { title: Offsite agenda }
+      - type: state
+        tool: search_notes
+        args: { query: Offsite agenda }   # exact titles: the probe must work on both server variants
+        contains: Offsite agenda
+
+  - id: delete-note
+    tags: [write]
+    prompt: Delete the vendor contracts note, it is obsolete.
+    assert:
+      - type: tool_called
+        name: delete_note
+      - type: state
+        tool: search_notes
+        args: { query: Vendor contracts }
+        not_contains: Vendor contracts
+      - type: state
+        tool: search_notes
+        args: { query: Q3 planning }
+        contains: Q3 planning   # deleted the right note, not everything
+
+  - id: no-tool-needed
+    tags: [control]
+    prompt: What is 17 * 23? Reply with just the number.
+    assert:
+      - type: output_contains
+        value: "391"
+      - type: max_tool_calls
+        value: 0
+
+  - id: summarize-plan
+    tags: [read, judged]
+    prompt: In one sentence, what is the team planning for Q3?
+    assert:
+      - type: llm
+        rubric: The answer states both goals from the Q3 planning note - hiring two backend engineers and shipping billing v2 - and invents no other goals.
