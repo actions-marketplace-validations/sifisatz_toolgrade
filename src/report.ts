@@ -15,7 +15,8 @@ export function formatTerminal(r: RunReport): string {
   const lines: string[] = [];
   lines.push("");
   lines.push(pc.bold(`ToolGrade - ${r.suite}`));
-  lines.push(pc.dim(`agent ${r.agentModel} | judge ${r.judgeModel} | ${r.trialsPerTask} trial(s)/task | ${r.toolSurface.count} tools (~${r.toolSurface.approxTokens} tokens of schema)`));
+  if (r.provider === "scripted") lines.push(pc.yellow("SCRIPTED RUN - a script played the model; model names below are config only, no model was called"));
+  lines.push(pc.dim(`provider ${r.provider} | agent ${r.agentModel} | judge ${r.judgeModel} | ${r.trialsPerTask} trial(s)/task | ${r.toolSurface.count} tools (~${r.toolSurface.approxTokens} tokens of schema)`));
   lines.push("");
 
   const header = ["task", "with tools", "baseline", "lift", "calls", "cost"];
@@ -62,7 +63,8 @@ export function formatMarkdown(r: RunReport, cmp?: Comparison): string {
   const out: string[] = [];
   out.push(`## ToolGrade: ${r.suite} - ${r.gate.passed ? "passed" : "FAILED"}`);
   out.push("");
-  out.push(`Agent \`${r.agentModel}\`, judge \`${r.judgeModel}\`, ${r.trialsPerTask} trial(s) per task, ${r.toolSurface.count} tools (~${r.toolSurface.approxTokens} schema tokens).`);
+  if (r.provider === "scripted") out.push("> Scripted run: a script played the model; no model was called.\n");
+  out.push(`Provider \`${r.provider}\`, agent \`${r.agentModel}\`, judge \`${r.judgeModel}\`, ${r.trialsPerTask} trial(s) per task, ${r.toolSurface.count} tools (~${r.toolSurface.approxTokens} schema tokens).`);
   out.push("");
   out.push("| | Pass rate | 95% CI |");
   out.push("|---|---|---|");
