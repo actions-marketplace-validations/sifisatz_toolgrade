@@ -7,6 +7,8 @@ import { loadSuite } from "./config.js";
 import { lintTools } from "./lint.js";
 import { openSession } from "./mcp.js";
 import { AnthropicProvider } from "./providers/anthropic.js";
+import { OpenAICompatibleProvider } from "./providers/openai.js";
+import type { ModelProvider } from "./providers/types.js";
 import { formatComparison, formatLint, formatMarkdown, formatTerminal } from "./report.js";
 import { runSuite, type RunReport } from "./runner.js";
 
@@ -35,11 +37,25 @@ program
   .option("-o, --out-dir <dir>", "where run reports are written", ".toolgrade/runs")
   .option("--markdown <file>", "also write a Markdown summary (for PR comments)")
   .option("--compare <report>", "compare against a previous run report; regression fails the run")
+  .option("--provider <name>", "anthropic, or openai for any OpenAI-compatible endpoint (Ollama, OpenAI, Gemini, Groq...)", "anthropic")
+  .option("--base-url <url>", "endpoint for --provider openai", "http://localhost:11434/v1")
+  .option("--api-key-env <var>", "env var holding the key for --provider openai (Ollama needs none)", "OPENAI_API_KEY")
+  .option("-m, --model <id>", "agent model (overrides the suite)")
+  .option("--judge-model <id>", "judge model (overrides the suite; defaults to --model when that is given)")
   .action(async (suitePath: string, o) => {
     const suite = await loadSuite(suitePath);
+    if (o.model) {
+      suite.agent.model = o.model;
+      suite.judge.model = o.model;
+    }
+    if (o.judgeModel) suite.judge.model = o.judgeModel;
+    // Local inference has no API bill; price it at zero unless the suite says otherwise.
+    if (o.provider === "openai" && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(o.baseUrl)) {
+      for (const m of [suite.agent.model, suite.judge.model]) suite.pricing[m] ??= { input: 0, output: 0 };
+    }
     const previous = o.compare ? await readReport(o.compare) : undefined;
     const report = await runSuite(suite, {
-      provider: new AnthropicProvider(),
+      provider: makeProvider(o),
       trials: o.trials,
       concurrency: o.concurrency,
       // commander defaults a --no-* flag to true; only override the suite when the flag was given.
@@ -95,6 +111,12 @@ program
     console.log(formatComparison(cmp));
     if (cmp.verdict === "regressed") process.exitCode = EXIT_GATE_FAILED;
   });
+
+function makeProvider(o: { provider: string; baseUrl: string; apiKeyEnv: string }): ModelProvider {
+  if (o.provider === "anthropic") return new AnthropicProvider();
+  if (o.provider === "openai") return new OpenAICompatibleProvider({ baseUrl: o.baseUrl, apiKey: process.env[o.apiKeyEnv] });
+  throw new InvalidArgumentError(`unknown provider "${o.provider}" (use anthropic or openai)`);
+}
 
 async function readReport(path: string): Promise<RunReport> {
   const report = JSON.parse(await readFile(path, "utf8")) as RunReport;

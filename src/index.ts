@@ -4,6 +4,7 @@ export { loadSuite, parseSuite, type Suite, type TaskSpec, type AssertionSpec } 
 export { lintTools, type LintIssue } from "./lint.js";
 export { openSession, type McpSession, type McpTool } from "./mcp.js";
 export { AnthropicProvider } from "./providers/anthropic.js";
+export { OpenAICompatibleProvider, type OpenAICompatibleOptions } from "./providers/openai.js";
 export { ScriptedProvider, type Script, type ScriptedReply } from "./providers/scripted.js";
 export type { ModelProvider, TurnRequest, TurnResponse } from "./providers/types.js";
 export { formatMarkdown, formatTerminal } from "./report.js";

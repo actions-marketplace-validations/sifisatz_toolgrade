@@ -71,6 +71,22 @@ descriptions and an exact-title-only search), run again, then:
 node dist/cli.js compare .toolgrade/runs/<good>.json .toolgrade/runs/latest.json
 ```
 
+## Run with a local model (no API key)
+
+Any OpenAI-compatible endpoint works through `--provider openai`; Ollama is the free, local one.
+
+```bash
+brew install ollama && ollama serve        # or open the Ollama app
+ollama pull qwen3:8b                       # any model with tool calling
+node dist/cli.js run examples/notes-suite.yaml --provider openai --model qwen3:8b --concurrency 2
+```
+
+`--model` overrides both agent and judge; pass `--judge-model` to judge with a different one.
+Localhost endpoints are priced at $0. Hosted endpoints work the same way, e.g.
+`--base-url https://api.openai.com/v1 --api-key-env OPENAI_API_KEY`. Small local models make
+more tool-use mistakes than frontier models - expect lower pass rates, which is exactly what
+ToolGrade is there to measure - and a small judge is less reliable on `llm` assertions.
+
 ## Commands
 
 | Command | What it does | Exit code |
