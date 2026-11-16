@@ -19,14 +19,20 @@ const migrationsFolder = join(process.cwd(), "drizzle");
 function open(): { db: Db; ready: Promise<void> } {
   const url = process.env.DATABASE_URL;
   if (url) {
+    // Serverless: few connections per instance, and no prepared statements so a transaction-mode
+    // pooler (Neon's "-pooler" host, PgBouncer) works. Migrations run once per deploy
+    // (`pnpm db:migrate` in the build), not on every cold start where instances would race.
     const db = drizzlePostgres({
-      client: postgres(url, { max: 10 }),
+      client: postgres(url, { max: 3, prepare: false }),
       schema,
       casing: "snake_case",
     });
+    const migrate = process.env.DB_MIGRATE_ON_CONNECT === "1";
     return {
       db: db as unknown as Db,
-      ready: migratePostgres(db, { migrationsFolder }),
+      ready: migrate
+        ? migratePostgres(db, { migrationsFolder })
+        : Promise.resolve(),
     };
   }
   // Zero-infra local mode: embedded Postgres (WASM), single connection, demo/dev only.

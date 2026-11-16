@@ -107,7 +107,14 @@ function ensureLocalEnv() {
 }
 
 async function main() {
-  ensureLocalEnv();
+  if (process.env.DATABASE_URL) {
+    // Seeding a hosted database: secrets come from the environment, and migrations run first.
+    if (!process.env.BETTER_AUTH_SECRET)
+      throw new Error("set BETTER_AUTH_SECRET to the deployment's secret");
+    process.env.DB_MIGRATE_ON_CONNECT = "1";
+  } else {
+    ensureLocalEnv();
+  }
   const db = await getDb();
   const auth = await getAuth();
 
