@@ -8,6 +8,8 @@ const StdioServer = z.object({
   args: z.array(z.string()).default([]),
   cwd: z.string().optional(),
   env: z.record(z.string(), z.string()).default({}),
+  /** Directory copied into a fresh ${TRIAL_DIR} for every session (relative to the suite file). */
+  fixture: z.string().optional(),
 });
 
 const HttpServer = z.object({
@@ -129,7 +131,9 @@ export function parseSuite(raw: unknown, baseDir: string): Suite {
     ids.add(task.id);
   }
   if (isStdio(suite.server)) {
-    suite.server.cwd = resolve(baseDir, suite.server.cwd ?? ".");
+    // A cwd inside the per-trial sandbox is only known once the sandbox exists.
+    if (!suite.server.cwd?.includes("${TRIAL_DIR}")) suite.server.cwd = resolve(baseDir, suite.server.cwd ?? ".");
+    if (suite.server.fixture) suite.server.fixture = resolve(baseDir, suite.server.fixture);
   }
   return suite;
 }

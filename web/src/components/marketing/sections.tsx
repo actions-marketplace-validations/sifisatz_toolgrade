@@ -129,6 +129,16 @@ export function Measured() {
           </div>
         ))}
       </InView>
+      <div className="reveal mt-10 flex justify-center">
+        <Button
+          variant="outline"
+          size="lg"
+          className="h-11 px-5"
+          render={<Link href="/benchmark" />}
+        >
+          See the public MCP server benchmark <ArrowRight />
+        </Button>
+      </div>
     </section>
   );
 }
@@ -416,17 +426,18 @@ export function Footer() {
     {
       title: "Product",
       links: [
-        ["Features", "#product"],
-        ["How it works", "#how-it-works"],
-        ["Pricing", "#pricing"],
+        ["Features", "/#product"],
+        ["How it works", "/#how-it-works"],
+        ["Pricing", "/#pricing"],
       ],
     },
     {
       title: "Learn",
       links: [
-        ["Methodology", "#methodology"],
-        ["FAQ", "#faq"],
-        ["Measured results", "#measured"],
+        ["Benchmark", "/benchmark"],
+        ["Methodology", "/#methodology"],
+        ["FAQ", "/#faq"],
+        ["Measured results", "/#measured"],
       ],
     },
     {

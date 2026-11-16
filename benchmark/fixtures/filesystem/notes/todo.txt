@@ -1,0 +1,2 @@
+- renew TLS certificate on api-gateway
+- update README badges

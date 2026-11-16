@@ -1,0 +1,4 @@
+{"type":"entity","name":"Dana Reyes","entityType":"person","observations":["Engineering manager","Owns the Q3 planning document"]}
+{"type":"entity","name":"Sam Okafor","entityType":"person","observations":["Site reliability engineer","On call this week"]}
+{"type":"entity","name":"Billing v2","entityType":"project","observations":["Migration of billing to the v2 API","Ships in December"]}
+{"type":"relation","from":"Dana Reyes","to":"Billing v2","relationType":"leads"}

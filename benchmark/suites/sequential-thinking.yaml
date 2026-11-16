@@ -1,0 +1,51 @@
+# ToolGrade public benchmark - @modelcontextprotocol/server-sequential-thinking 2.1.1 (pinned)
+# A reasoning-scaffold tool: there is no server state to check, so tasks are multi-step problems
+# with one checkable answer. The question is whether the tool beats the same model thinking alone.
+name: server-sequential-thinking@2.1.1
+
+server:
+  command: node
+  args: [node_modules/@modelcontextprotocol/server-sequential-thinking/dist/index.js]
+  cwd: ..
+
+agent:
+  max_turns: 16
+  max_tokens: 6000
+
+run:
+  trials: 3
+  baseline: true
+  concurrency: 2
+
+tasks:
+  - id: bat-and-ball
+    prompt: A bat and a ball cost 1.10 euros in total. The bat costs 1.00 euro more than the ball. How much does the ball cost, in cents? Give the number of cents.
+    assert:
+      - { type: output_regex, pattern: "\\b5\\s*(cents?|c)\\b|\\b0[.,]05\\b|\\bfive cents\\b" }
+
+  - id: weekday-offset
+    prompt: Today is Monday. What day of the week will it be 100 days from today?
+    assert:
+      - { type: output_contains, value: "Wednesday" }
+
+  - id: meeting-rooms
+    prompt: "Meetings: A 09:00-10:00, B 09:30-10:30, C 10:00-11:00, D 10:30-11:30. A meeting ending at 10:00 frees its room for one starting at 10:00. What is the minimum number of rooms needed? Answer with the number."
+    assert:
+      - { type: output_regex, pattern: "\\b2\\b|\\btwo\\b" }
+
+  - id: ordering
+    prompt: Alice is older than Bob. Carol is younger than Bob. Dan is older than Alice. Who is the second oldest?
+    assert:
+      - { type: output_contains, value: "Alice" }
+
+  - id: discount-chain
+    prompt: A jacket costs 200 euros. It gets a 25% discount, then an extra 10% off the discounted price, then 20% VAT is added. What is the final price in euros?
+    assert:
+      - { type: output_regex, pattern: "\\b162(\\.0+)?\\b" }
+
+  - id: no-tool-needed
+    tags: [control]
+    prompt: What is 17 * 23? Reply with just the number.
+    assert:
+      - { type: output_contains, value: "391" }
+      - { type: max_tool_calls, value: 0 }

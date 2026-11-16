@@ -1,0 +1,78 @@
+# ToolGrade public benchmark - @modelcontextprotocol/server-filesystem 2.3.0 (pinned in ../package.json)
+# Each trial gets a fresh copy of ../fixtures/filesystem as its allowed directory.
+# Outcome checks only: the answer, or the files on disk after the run.
+name: server-filesystem@2.3.0
+
+server:
+  command: node
+  args: [node_modules/@modelcontextprotocol/server-filesystem/dist/index.js, "${TRIAL_DIR}"]
+  cwd: ..
+  fixture: ../fixtures/filesystem
+
+agent:
+  max_turns: 10
+  max_tokens: 6000
+
+run:
+  trials: 3
+  baseline: true
+  concurrency: 2
+
+tasks:
+  - id: find-decision
+    tags: [read]
+    prompt: The project's meeting notes are in the folder the file tools can access. What was decided about billing in the October 2nd meeting, and by when?
+    assert:
+      - { type: output_contains, value: [v2, December] }
+
+  - id: top-region
+    tags: [read]
+    prompt: Using the Q3 revenue report in the project folder, which region had the highest revenue, and how much was it?
+    assert:
+      - { type: output_regex, pattern: "\\bUS\\b" }
+      - { type: output_contains, value: "205" }
+
+  - id: edit-config
+    tags: [write]
+    prompt: In the project folder, turn debug off in src/config.json. Leave every other setting unchanged.
+    assert:
+      - type: state
+        tool: read_text_file
+        args: { path: "${TRIAL_DIR}/src/config.json" }
+        contains: ["false", "8080", "orders", "3"]
+        not_contains: "true"
+
+  - id: append-todo
+    tags: [write]
+    prompt: Add "rotate API keys" as a new item to the todo list in the project's notes folder. Keep the existing items.
+    assert:
+      - type: state
+        tool: read_text_file
+        args: { path: "${TRIAL_DIR}/notes/todo.txt" }
+        contains: ["rotate API keys", "renew TLS certificate", "update README badges"]
+
+  - id: create-changelog
+    tags: [write]
+    prompt: Create docs/CHANGELOG.md in the project folder with a heading "0.2.0" and one bullet saying "Add order search".
+    assert:
+      - type: state
+        tool: read_text_file
+        args: { path: "${TRIAL_DIR}/docs/CHANGELOG.md" }
+        contains: ["0.2.0", "order search"]
+
+  - id: rename-report
+    tags: [write]
+    prompt: Rename the Q3 report in the project's reports folder to 2026-q3.csv.
+    assert:
+      - type: state
+        tool: list_directory
+        args: { path: "${TRIAL_DIR}/reports" }
+        contains: "2026-q3.csv"
+        not_contains: "[FILE] q3.csv"
+
+  - id: no-tool-needed
+    tags: [control]
+    prompt: What is 17 * 23? Reply with just the number.
+    assert:
+      - { type: output_contains, value: "391" }
+      - { type: max_tool_calls, value: 0 }

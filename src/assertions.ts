@@ -61,7 +61,7 @@ async function evaluate(spec: AssertionSpec, ctx: AssertionContext): Promise<Ass
     }
     case "state": {
       if (!ctx.session) return r(false, "no server session available for state check");
-      const out = await ctx.session.callTool(spec.tool, spec.args);
+      const out = await ctx.session.callTool(spec.tool, withTrialDir(spec.args, ctx.session.trialDir) as Record<string, unknown>);
       if (out.isError) return r(false, `state probe ${spec.tool} errored: ${out.text.slice(0, 200)}`);
       const lower = out.text.toLowerCase();
       const missing = toList(spec.contains).filter((s) => !lower.includes(s.toLowerCase()));
@@ -79,6 +79,15 @@ async function evaluate(spec: AssertionSpec, ctx: AssertionContext): Promise<Ass
       return r(v.passed, v.reasoning);
     }
   }
+}
+
+/** State probes may point into the session's sandbox: substitute ${TRIAL_DIR} in every string. */
+export function withTrialDir(value: unknown, dir: string | undefined): unknown {
+  if (!dir) return value;
+  if (typeof value === "string") return value.replaceAll("${TRIAL_DIR}", dir);
+  if (Array.isArray(value)) return value.map((v) => withTrialDir(v, dir));
+  if (value && typeof value === "object") return Object.fromEntries(Object.entries(value).map(([k, v]) => [k, withTrialDir(v, dir)]));
+  return value;
 }
 
 function toList(v: string | string[] | undefined): string[] {

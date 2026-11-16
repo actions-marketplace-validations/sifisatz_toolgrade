@@ -70,8 +70,49 @@ In:
 - Provider abstraction: Anthropic for real runs, a scripted provider for deterministic tests.
 - Example MCP server (notes) with a deliberately degraded "vague" variant to demo the lift.
 
-Out (v2): hosted dashboard, auth, billing, OpenAI/other providers, trace ingestion,
-multi-turn simulated users.
+Out (v2): billing, trace ingestion, multi-turn simulated users. (Since delivered on top of the
+PoC: hosted dashboard with sign-in and org isolation, OpenAI-compatible and local-model
+providers, `init` scaffolding, a public marketing site, and a live demo deployment.)
+
+## 7. Honest assessment (2026-11-16)
+
+The PoC is a credible demo, not yet a business. The core loop - run with and without tools,
+check outcomes, report intervals - is easy to replicate; any eval platform could add it in a
+sprint. What is defensible is the angle (a no-tool baseline, state-checked outcomes, honest
+statistics) and owning the "CI for MCP servers" category before anyone else does. Money comes
+from the parts customers cannot easily build themselves.
+
+## 8. Roadmap
+
+Ordered by evidence per unit of effort. Each phase has an exit criterion; do not start the next
+phase's build work until the previous one has produced its evidence.
+
+| # | Phase | What | Exit criterion |
+|---|---|---|---|
+| 1 | **Public benchmark** (now) | Grade widely used, credential-free MCP servers with real, state-checked tasks; pinned versions; publish a leaderboard and the method. Needs per-trial sandbox fixtures in the engine. | Leaderboard live; results reproducible from the repo with one command; method page published. |
+| 2 | **Customer discovery** (in parallel with 1) | Talk to 10-15 teams shipping MCP servers; use the benchmark as the conversation opener; sign 3 design partners. | 3 partners running ToolGrade weekly; a ranked list of their pains. |
+| 3 | **Auto-generated tasks** | Generate candidate tasks and outcome checks from tool schemas, docs and (later) real usage logs; a human approves; generated tasks are validated against the live server before use. | Partners get a useful first suite in under 15 minutes without writing tasks by hand. |
+| 4 | **Model matrix and drift alerts** | Run the same suite across Claude, GPT, Gemini and open models; re-run on vendor model releases; alert on significant drops. | First alert that a partner acts on. |
+| 5 | **Stateful sandboxes** | Per-trial seeded environments beyond files: databases, mock accounts, recorded APIs. | A partner's real server graded with state checks, no production data touched. |
+| 6 | **Tool-description optimisation** | Automatically test description and schema variants; report the wording with the best significant lift. | One measured, shipped description improvement at a partner. |
+| 7 | **Monetisation** | Pricing tested with partners (likely per tool surface with run-minutes, plus enterprise); billing only once someone asks to pay. | First paid contract. |
+
+Risks to watch: a model vendor or eval platform ships this as a feature (mitigation: speed, the
+benchmark as category ownership, depth on sandboxes); MCP spec churn; model spend per run (who
+pays, and how to keep runs cheap - local models and caching help); thin moat until phases 3-5.
+
+### Phase 1 detail: the public benchmark
+
+- **Servers:** credential-free reference servers anyone can run (no accounts touched, fully
+  reproducible). Versions pinned in each suite.
+- **Tasks:** realistic requests with outcome checks against the server's actual state after the
+  run (files on disk, entities in a knowledge graph), plus at least one no-tool control task.
+- **Isolation:** each trial gets a fresh copy of the suite's fixture directory (`${TRIAL_DIR}`).
+- **Models:** start with an open-weights model on a laptop (free, reproducible); add hosted
+  models as columns when keys are available. Always label the model next to the score.
+- **Publication:** results page on the marketing site, raw run reports in the repo, method and
+  limitations stated next to the numbers. A score is about server + model + task set together,
+  never the server alone.
 
 ## 6. Stack decisions
 

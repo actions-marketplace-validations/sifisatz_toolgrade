@@ -198,6 +198,18 @@ importers:
         specifier: ^5.1.0
         version: 5.1.0(@opentelemetry/api@1.10.0)(@types/node@26.6.6)(vite@8.3.8(@types/node@26.6.6)(esbuild@0.28.2)(jiti@2.7.0)(tsx@4.23.15)(yaml@2.9.1))
 
+  benchmark:
+    dependencies:
+      '@modelcontextprotocol/server-filesystem':
+        specifier: 2.3.0
+        version: 2.3.0
+      '@modelcontextprotocol/server-memory':
+        specifier: 2.1.1
+        version: 2.1.1
+      '@modelcontextprotocol/server-sequential-thinking':
+        specifier: 2.1.1
+        version: 2.1.1
+
   web:
     dependencies:
       '@base-ui/react':
@@ -1263,6 +1275,9 @@ packages:
     cpu: [x64]
     os: [win32]
 
+  '@isaacs/nonrecursive-glob-match@1.1.0':
+    resolution: {integrity: sha512-GPm/Dbvk5RLmhRnxXIa7nTpK0xtl4E0wj0MslsuNiJ1FIROU+2+9lgUC/dgF7Ey4QCWhfEsgxilMRMCdHPfDfw==}
+
   '@jridgewell/gen-mapping@0.3.13':
     resolution: {integrity: sha512-2kkt/7niJ6MgEPxF0bYdQ6etZaA+fQvDcLKckhy1yIQOzaoKjBBjSj63/aLVjYE3qhRt5dvM+uUyfCg6UKCBbA==}
 
@@ -1292,6 +1307,21 @@ packages:
     peerDependenciesMeta:
       '@cfworker/json-schema':
         optional: true
+
+  '@modelcontextprotocol/server-filesystem@2.3.0':
+    resolution: {integrity: sha512-dnwDFqYi2Q3VbFDnVOUme4+81CzwHBj3OKeYEgZ6UkBp7rWSm5OKiidemgIF0kkt5AyAi6mHsqx0cfTZBP1DJQ==}
+    engines: {node: '>=24'}
+    hasBin: true
+
+  '@modelcontextprotocol/server-memory@2.1.1':
+    resolution: {integrity: sha512-MbjK6Pi+uGU3EwGk9HyCp/1zKwnuB/QMQ/wQOlswaLgHzIeeCuyVdWUTWg0hTGBk+n+3l5la5a4egbt8YuoVAg==}
+    engines: {node: '>=24'}
+    hasBin: true
+
+  '@modelcontextprotocol/server-sequential-thinking@2.1.1':
+    resolution: {integrity: sha512-yvj9eotCoXX7BLmyOKdajnCYB5vgeCS3YwtEU0wCIcVgl+xvCdBtjkd0CTA45Ljh2+Iv1538n28VAnrstps1Tg==}
+    engines: {node: '>=24'}
+    hasBin: true
 
   '@modelcontextprotocol/server@2.4.0':
     resolution: {integrity: sha512-rgR9yxSaAJ+bcsi/XroT/S2AfPiIWloXAnrdfYSCms9ivVju0ishu/wW0J21Ho6+ZOR1r7RyeRbjiRuF87ix5Q==}
@@ -2917,6 +2947,10 @@ packages:
     resolution: {integrity: sha512-vpLQEs+VLCr1nU0BXS07maYoFwlDAH0gngQuuttxIwutDFEMHq2blX+8vpgxDdK3J1PwjCJiep77OitTZ4Ll1A==}
     engines: {node: 18 || 20 || >=22}
 
+  minimatch@11.0.8:
+    resolution: {integrity: sha512-nFQuYSTVrGvysVBps5Ih+0BdnYFN/Cj3C816r6+p7yK+FHrVLGE4O4N9AFwykrlNlvM2HYt+Rad1Uiro6h88Ig==}
+    engines: {node: 20 || >=22}
+
   minimist@1.2.8:
     resolution: {integrity: sha512-2yyAR8qBkN3YuheJanUpWC5U3bb5osDywNB8RzDVlDwDHbocAJveqqj1u8+SVD7jkWT4yvsHCpWqqWqAxb0zCA==}
 
@@ -4361,6 +4395,8 @@ snapshots:
   '@img/sharp-win32-x64@0.35.5':
     optional: true
 
+  '@isaacs/nonrecursive-glob-match@1.1.0': {}
+
   '@jridgewell/gen-mapping@0.3.13':
     dependencies:
       '@jridgewell/sourcemap-codec': 1.6.0
@@ -4405,6 +4441,24 @@ snapshots:
       zod-to-json-schema: 3.25.2(zod@4.6.7)
     transitivePeerDependencies:
       - supports-color
+
+  '@modelcontextprotocol/server-filesystem@2.3.0':
+    dependencies:
+      '@modelcontextprotocol/server': 2.4.0
+      diff: 8.0.4
+      minimatch: 11.0.8
+      zod: 4.6.7
+
+  '@modelcontextprotocol/server-memory@2.1.1':
+    dependencies:
+      '@modelcontextprotocol/server': 2.4.0
+      zod: 4.6.7
+
+  '@modelcontextprotocol/server-sequential-thinking@2.1.1':
+    dependencies:
+      '@modelcontextprotocol/server': 2.4.0
+      chalk: 5.6.2
+      zod: 4.6.7
 
   '@modelcontextprotocol/server@2.4.0':
     dependencies:
@@ -5673,6 +5727,11 @@ snapshots:
 
   minimatch@10.2.6:
     dependencies:
+      brace-expansion: 5.0.13
+
+  minimatch@11.0.8:
+    dependencies:
+      '@isaacs/nonrecursive-glob-match': 1.1.0
       brace-expansion: 5.0.13
 
   minimist@1.2.8: {}

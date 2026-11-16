@@ -1,0 +1,6 @@
+{
+  "service": "orders",
+  "port": 8080,
+  "debug": true,
+  "retries": 3
+}

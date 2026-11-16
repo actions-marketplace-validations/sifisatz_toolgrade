@@ -16,11 +16,11 @@ import { CTA } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
-  { href: "#product", label: "Product" },
-  { href: "#how-it-works", label: "How it works" },
-  { href: "#methodology", label: "Methodology" },
-  { href: "#pricing", label: "Pricing" },
-  { href: "#faq", label: "FAQ" },
+  { href: "/#product", label: "Product" },
+  { href: "/#how-it-works", label: "How it works" },
+  { href: "/benchmark", label: "Benchmark" },
+  { href: "/#methodology", label: "Methodology" },
+  { href: "/#pricing", label: "Pricing" },
 ];
 
 export function MarketingNav() {
@@ -49,13 +49,13 @@ export function MarketingNav() {
           aria-label="Main"
         >
           {LINKS.map((l) => (
-            <a
+            <Link
               key={l.href}
               href={l.href}
               className="transition-colors hover:text-foreground"
             >
               {l.label}
-            </a>
+            </Link>
           ))}
         </nav>
         <div className="ml-auto flex items-center gap-1.5">
@@ -92,14 +92,14 @@ export function MarketingNav() {
               <SheetTitle className="sr-only">Menu</SheetTitle>
               <nav className="mt-6 grid gap-1 text-base" aria-label="Mobile">
                 {LINKS.map((l) => (
-                  <a
+                  <Link
                     key={l.href}
                     href={l.href}
                     onClick={() => setOpen(false)}
                     className="rounded-md px-2 py-2 hover:bg-muted"
                   >
                     {l.label}
-                  </a>
+                  </Link>
                 ))}
               </nav>
               <div className="mt-6 grid gap-2">

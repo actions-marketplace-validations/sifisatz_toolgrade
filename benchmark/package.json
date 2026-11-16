@@ -1,0 +1,11 @@
+{
+  "name": "toolgrade-benchmark",
+  "private": true,
+  "description": "Public benchmark of reference MCP servers, graded with ToolGrade. Server versions are pinned for reproducibility.",
+  "type": "module",
+  "dependencies": {
+    "@modelcontextprotocol/server-filesystem": "2.3.0",
+    "@modelcontextprotocol/server-memory": "2.1.1",
+    "@modelcontextprotocol/server-sequential-thinking": "2.1.1"
+  }
+}

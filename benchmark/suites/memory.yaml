@@ -1,0 +1,75 @@
+# ToolGrade public benchmark - @modelcontextprotocol/server-memory 2.1.1 (pinned in ../package.json)
+# Each trial starts from the knowledge graph in ../fixtures/memory/memory.jsonl, in its own sandbox.
+# Outcome checks only: the answer, or the graph's contents after the run.
+name: server-memory@2.1.1
+
+server:
+  command: node
+  args: [node_modules/@modelcontextprotocol/server-memory/dist/index.js]
+  cwd: ..
+  fixture: ../fixtures/memory
+  env:
+    MEMORY_FILE_PATH: "${TRIAL_DIR}/memory.jsonl"
+
+agent:
+  max_turns: 10
+  max_tokens: 6000
+
+run:
+  trials: 3
+  baseline: true
+  concurrency: 2
+
+tasks:
+  - id: recall-lead
+    tags: [read]
+    prompt: Check your memory. Who leads the Billing v2 project, and when does it ship?
+    assert:
+      - { type: output_contains, value: ["Dana", "December"] }
+
+  - id: remember-person
+    tags: [write]
+    prompt: Remember this for later - Priya Nair is a product designer who joined the team in November.
+    assert:
+      - type: state
+        tool: search_nodes
+        args: { query: "Priya" }
+        contains: ["Priya Nair", "design", "November"]
+
+  - id: relate-people
+    tags: [write]
+    prompt: Record in your memory that Sam Okafor reports to Dana Reyes.
+    assert:
+      - type: state
+        tool: open_nodes
+        args: { names: ["Sam Okafor"] }
+        contains: ["Dana Reyes"]
+
+  - id: update-fact
+    tags: [write]
+    prompt: Billing v2 slipped - it now ships in January, not December. Update your memory.
+    assert:
+      - type: state
+        tool: open_nodes
+        args: { names: ["Billing v2"] }
+        contains: "January"
+
+  - id: forget-person
+    tags: [write]
+    prompt: Sam Okafor left the company. Remove him from your memory entirely, but keep everything else.
+    assert:
+      - type: state
+        tool: search_nodes
+        args: { query: "Sam Okafor" }
+        not_contains: "Sam Okafor"
+      - type: state
+        tool: open_nodes
+        args: { names: ["Dana Reyes", "Billing v2"] }
+        contains: ["Dana Reyes", "Billing v2"]
+
+  - id: no-tool-needed
+    tags: [control]
+    prompt: What is 17 * 23? Reply with just the number.
+    assert:
+      - { type: output_contains, value: "391" }
+      - { type: max_tool_calls, value: 0 }
