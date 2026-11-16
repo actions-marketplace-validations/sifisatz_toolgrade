@@ -72,6 +72,25 @@ node dist/cli.js upload .toolgrade/runs/latest.json --url http://localhost:3100 
   `owner` or `admin` role to create or revoke API keys.
 - CLI uploads authenticate with project API keys, not user sessions.
 
+## Deployment
+
+| What | Where | How it updates |
+|---|---|---|
+| Dashboard + API | https://toolgrade.vercel.app (Vercel project `toolgrade`, root directory `web`) | Every push to `main` deploys to production; other branches get preview URLs |
+| Database | Neon Postgres via the Vercel integration (`DATABASE_URL`, `DATABASE_URL_UNPOOLED`) | Migrations run in the build (`pnpm db:migrate`) before `next build` |
+| Marketing site | https://sifisatz.github.io/toolgrade/ | `.github/workflows/pages.yml` on every push to `main` |
+
+Re-seed the hosted demo (resets only the demo user and the `acme` org):
+
+```bash
+vercel env pull --environment=production web/.data/prod/vercel-production.env
+cd web && set -a && . .data/prod/vercel-production.env && . .data/prod/prod.env && set +a
+SEED_OUT_DIR=.data/prod pnpm seed
+```
+
+`web/.data/prod/prod.env` holds the production `BETTER_AUTH_SECRET` and `DEMO_PASSWORD`
+(mode 600, git-ignored); the same values are stored as sensitive variables in Vercel.
+
 ## Production environment
 
 | Variable | Purpose |
