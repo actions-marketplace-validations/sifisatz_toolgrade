@@ -58,6 +58,7 @@ describe("end to end against the real notes MCP server", () => {
     expect(report.totalCostUsd).toBeGreaterThan(0);
     expect(report.costIsLowerBound).toBe(false);
     expect(formatTerminal(report)).toContain("Gate passed");
+    expect(formatTerminal(report)).toContain("SCRIPTED RUN");
     expect(formatMarkdown(report)).toContain("| **Lift** | **+83pp**");
   });
 
