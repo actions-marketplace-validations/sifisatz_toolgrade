@@ -2,6 +2,7 @@
 
 import { KeyRound, Trash2 } from "lucide-react";
 import { useActionState, useTransition } from "react";
+import { toast } from "sonner";
 import {
   type CreateKeyState,
   createApiKey,
@@ -111,7 +112,15 @@ export function ApiKeysPanel({
                   size="sm"
                   disabled={revoking}
                   onClick={() =>
-                    startRevoke(() => revokeApiKey(orgSlug, projectSlug, k.id))
+                    startRevoke(async () => {
+                      const res = await revokeApiKey(
+                        orgSlug,
+                        projectSlug,
+                        k.id,
+                      );
+                      if (res.ok) toast.success(`Revoked "${k.name}"`);
+                      else toast.error(res.error ?? "Could not revoke the key");
+                    })
                   }
                 >
                   <Trash2 /> Revoke

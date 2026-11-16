@@ -172,7 +172,7 @@ async function Project({
             <CardHeader>
               <CardTitle>Runs</CardTitle>
               <CardDescription>
-                Every run uploaded for this project, newest first.
+                The latest 100 runs for this project, newest first.
               </CardDescription>
             </CardHeader>
             <CardContent className="px-2">

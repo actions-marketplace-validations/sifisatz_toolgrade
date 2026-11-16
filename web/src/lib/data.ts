@@ -1,11 +1,25 @@
 import "server-only";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import {
+  and,
+  count,
+  desc,
+  eq,
+  inArray,
+  isNull,
+  lt,
+  lte,
+  sql,
+} from "drizzle-orm";
 import { connection } from "next/server";
+import { cache } from "react";
 import { getDb } from "@/db/client";
 import { apiKeys, orgs, projects, runs } from "@/db/schema";
 
 // Every read is request-time (connection()) and org-scoped: a project is only ever looked up
-// through the org that owns it.
+// through the org that owns it. cache() de-duplicates identical lookups within one request
+// (the layout and the page both ask for the org and its projects).
+
+const TREND_POINTS = 20;
 
 const runSummaryColumns = {
   id: runs.id,
@@ -33,7 +47,7 @@ const runSummaryColumns = {
 
 export type RunSummary = Awaited<ReturnType<typeof listRuns>>[number];
 
-export async function getOrg(slug: string) {
+export const getOrg = cache(async (slug: string) => {
   await connection();
   const db = await getDb();
   const [org] = await db
@@ -42,21 +56,24 @@ export async function getOrg(slug: string) {
     .where(eq(orgs.slug, slug))
     .limit(1);
   return org;
-}
+});
 
-export async function getProject(orgSlug: string, projectSlug: string) {
-  await connection();
-  const db = await getDb();
-  const [row] = await db
-    .select({ project: projects, org: orgs })
-    .from(projects)
-    .innerJoin(orgs, eq(projects.orgId, orgs.id))
-    .where(and(eq(orgs.slug, orgSlug), eq(projects.slug, projectSlug)))
-    .limit(1);
-  return row;
-}
+export const getProject = cache(
+  async (orgSlug: string, projectSlug: string) => {
+    await connection();
+    const db = await getDb();
+    const [row] = await db
+      .select({ project: projects, org: orgs })
+      .from(projects)
+      .innerJoin(orgs, eq(projects.orgId, orgs.id))
+      .where(and(eq(orgs.slug, orgSlug), eq(projects.slug, projectSlug)))
+      .limit(1);
+    return row;
+  },
+);
 
-export async function listProjects(orgId: string) {
+/** Projects with their run count and only the last TREND_POINTS runs each. */
+export const listProjects = cache(async (orgId: string) => {
   await connection();
   const db = await getDb();
   const list = await db
@@ -65,29 +82,42 @@ export async function listProjects(orgId: string) {
     .where(eq(projects.orgId, orgId))
     .orderBy(projects.name);
   if (list.length === 0) return [];
-  const recent = await db
-    .select({ projectId: runs.projectId, ...runSummaryColumns })
+  const ids = list.map((p) => p.id);
+
+  const counts = await db
+    .select({ projectId: runs.projectId, n: count() })
     .from(runs)
-    .where(
-      inArray(
-        runs.projectId,
-        list.map((p) => p.id),
-      ),
-    )
-    .orderBy(desc(runs.createdAt));
+    .where(inArray(runs.projectId, ids))
+    .groupBy(runs.projectId);
+  const ranked = db.$with("ranked").as(
+    db
+      .select({
+        projectId: runs.projectId,
+        ...runSummaryColumns,
+        rn: sql<number>`row_number() over (partition by ${runs.projectId} order by ${runs.createdAt} desc)`.as(
+          "rn",
+        ),
+      })
+      .from(runs)
+      .where(inArray(runs.projectId, ids)),
+  );
+  const recent = await db
+    .with(ranked)
+    .select()
+    .from(ranked)
+    .where(lte(ranked.rn, TREND_POINTS))
+    .orderBy(desc(ranked.createdAt));
+
   return list.map((p) => {
     const mine = recent.filter((r) => r.projectId === p.id);
     return {
       ...p,
       latest: mine[0],
-      runCount: mine.length,
-      trend: mine
-        .slice(0, 20)
-        .reverse()
-        .map((r) => r.passRate),
+      runCount: Number(counts.find((c) => c.projectId === p.id)?.n ?? 0),
+      trend: mine.map((r) => r.passRate).reverse(),
     };
   });
-}
+});
 
 export async function listRuns(projectId: string, limit = 100) {
   await connection();
@@ -112,11 +142,17 @@ export async function getRun(projectId: string, runId: string) {
   return run;
 }
 
-/** The run immediately before this one in the same project, for "vs previous" deltas. */
-export async function getPreviousRunId(projectId: string, runId: string) {
-  const list = await listRuns(projectId, 1000);
-  const i = list.findIndex((r) => r.id === runId);
-  return i >= 0 ? list[i + 1]?.id : undefined;
+/** The run immediately before the given time in the same project, for "vs previous" links. */
+export async function getPreviousRunId(projectId: string, before: Date) {
+  await connection();
+  const db = await getDb();
+  const [prev] = await db
+    .select({ id: runs.id })
+    .from(runs)
+    .where(and(eq(runs.projectId, projectId), lt(runs.createdAt, before)))
+    .orderBy(desc(runs.createdAt))
+    .limit(1);
+  return prev?.id;
 }
 
 export async function listApiKeys(projectId: string) {

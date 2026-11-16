@@ -2,58 +2,141 @@ import type { RunReport } from "toolgrade/core";
 import { z } from "zod";
 import type { RunInsert } from "@/db/schema";
 
+// Everything a page renders is validated here, with types and bounds that also fit the database
+// columns, so a stored run can never crash its own pages later. Unknown keys are stripped; fields
+// added in later engine versions get defaults so older reports still render.
+
+const Str = (max: number) => z.string().max(max);
+const Count = z.number().int().nonnegative().max(1_000_000_000);
+const Unit = z.number().min(0).max(1);
+const Signed = z.number().min(-1).max(1);
+const Measure = z.number().nonnegative().max(1e12);
+const Usd = z.number().nonnegative().max(10_000_000);
+
 const RateSchema = z.object({
-  rate: z.number().min(0).max(1),
-  low: z.number(),
-  high: z.number(),
-  n: z.number(),
-  passes: z.number(),
+  passes: z.number().nonnegative().max(1e9),
+  n: Count,
+  rate: Unit,
+  low: Unit,
+  high: Unit,
 });
-const DiffSchema = z.object({
-  delta: z.number(),
-  low: z.number(),
-  high: z.number(),
+const DiffSchema = z.object({ delta: Signed, low: Signed, high: Signed });
+const Significance = z.enum(["better", "worse", "not_significant"]);
+
+const ArmSummary = z.object({
+  rate: RateSchema,
+  errors: Count,
+  meanToolCalls: Measure,
+  meanTurns: Measure,
+  meanInputTokens: Measure,
+  meanOutputTokens: Measure,
+  meanDurationMs: Measure,
+  costUsd: Usd.nullable(),
 });
 
-/** Validates the fields the platform indexes; the full report is stored as-is. */
-const ReportSchema = z
-  .object({
-    version: z.literal(1),
-    suite: z.string().min(1).max(200),
-    startedAt: z.string(),
-    provider: z.string(),
-    agentModel: z.string(),
-    judgeModel: z.string(),
-    trialsPerTask: z.number().int().min(1),
-    tasks: z.array(z.object({ taskId: z.string() }).loose()).min(1),
-    overall: z
-      .object({
-        tools: z
-          .object({
-            rate: RateSchema,
-            trials: z.object({ errors: z.number() }).loose(),
-          })
-          .loose(),
-        baseline: z.object({ rate: RateSchema }).loose().optional(),
-        lift: DiffSchema.optional(),
-        liftSignificance: z
-          .enum(["better", "worse", "not_significant"])
-          .optional(),
-      })
-      .loose(),
-    totalCostUsd: z.number().nullable(),
-    gate: z.object({ passed: z.boolean() }).loose(),
-    trials: z.array(z.unknown()),
-  })
-  .loose();
+const OverallArm = z.object({
+  rate: RateSchema,
+  trials: z.object({ passed: Count, graded: Count, errors: Count }),
+  costUsd: Usd.nullable(),
+});
+
+const Task = z.object({
+  taskId: Str(200),
+  prompt: Str(20_000).optional(),
+  tags: z.array(Str(100)).max(100).default([]),
+  tools: ArmSummary,
+  baseline: ArmSummary.optional(),
+  lift: DiffSchema.optional(),
+});
+
+const Trajectory = z.object({
+  finalText: Str(200_000),
+  toolCalls: z
+    .array(
+      z.object({
+        name: Str(200),
+        input: z.record(z.string(), z.unknown()),
+        output: Str(1_000_000),
+        isError: z.boolean(),
+        durationMs: Measure,
+      }),
+    )
+    .max(10_000),
+  turns: Count,
+  stopReason: Str(100),
+  incomplete: Str(100).optional(),
+  inputTokens: Count,
+  outputTokens: Count,
+  durationMs: Measure,
+});
+
+const Trial = z.object({
+  taskId: Str(200),
+  arm: z.enum(["tools", "baseline"]),
+  trial: Count,
+  passed: z.boolean(),
+  assertions: z
+    .array(
+      z.object({ type: Str(100), passed: z.boolean(), detail: Str(20_000) }),
+    )
+    .max(1000),
+  skipped: z.array(Str(100)).max(1000).default([]),
+  trajectory: Trajectory.optional(),
+  error: Str(20_000).optional(),
+  usage: z
+    .object({ inputTokens: Count, outputTokens: Count })
+    .default({ inputTokens: 0, outputTokens: 0 }),
+  costUsd: Usd.nullable(),
+});
+
+const ReportSchema = z.object({
+  version: z.literal(1),
+  suite: Str(200).min(1),
+  startedAt: Str(64),
+  finishedAt: Str(64).optional(),
+  provider: Str(100),
+  agentModel: Str(200),
+  judgeModel: Str(200),
+  trialsPerTask: z.number().int().min(1).max(1000),
+  toolSurface: z.object({
+    count: Count,
+    names: z.array(Str(200)).max(10_000),
+    schemaChars: Count,
+    approxTokens: Count,
+  }),
+  tasks: z.array(Task).min(1).max(1000),
+  overall: z.object({
+    tools: OverallArm,
+    baseline: OverallArm.optional(),
+    lift: DiffSchema.optional(),
+    liftTasks: Count.optional(),
+    liftSignificance: Significance.optional(),
+  }),
+  judgeCostUsd: Usd.nullable(),
+  totalCostUsd: Usd.nullable(),
+  costIsLowerBound: z.boolean().default(false),
+  unpricedModels: z.array(Str(200)).max(100).default([]),
+  gate: z.object({
+    passed: z.boolean(),
+    checks: z
+      .array(
+        z.object({ name: Str(100), passed: z.boolean(), detail: Str(2000) }),
+      )
+      .max(100),
+  }),
+  trials: z.array(Trial).max(100_000),
+});
 
 export const UploadSchema = z.object({
   report: ReportSchema,
   meta: z
     .object({
-      branch: z.string().max(255).optional(),
-      commit: z.string().max(64).optional(),
-      commitMessage: z.string().max(500).optional(),
+      branch: Str(255).optional(),
+      commit: z
+        .string()
+        .regex(/^[0-9a-f]{4,64}$/i)
+        .optional(),
+      commitMessage: Str(500).optional(),
     })
     .default({}),
 });
@@ -61,6 +144,11 @@ export const UploadSchema = z.object({
 export type Upload = z.infer<typeof UploadSchema>;
 
 export const MAX_UPLOAD_BYTES = 5 * 1024 * 1024;
+
+/** Postgres text and jsonb reject NUL; refuse it up front instead of failing the insert. */
+export function hasNul(raw: string): boolean {
+  return raw.includes("\\u0000") || raw.includes("\u0000");
+}
 
 export function toRunRow(
   projectId: string,

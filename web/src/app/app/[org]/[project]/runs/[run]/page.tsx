@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/table";
 import { getPreviousRunId, getProject, getRun } from "@/lib/data";
 import { dateTime, pct, shortSha, signedPct, usd } from "@/lib/format";
+import { forClient } from "@/lib/trim";
 
 export const metadata = { title: "Run" };
 
@@ -61,7 +62,7 @@ async function RunDetail({
   const { project, org } = found;
   const run = await getRun(project.id, runId);
   if (!run) notFound();
-  const previousId = await getPreviousRunId(project.id, run.id);
+  const previousId = await getPreviousRunId(project.id, run.createdAt);
   const r = run.report;
   const o = r.overall;
   const base = `/app/${org.slug}/${project.slug}`;
@@ -254,7 +255,9 @@ async function RunDetail({
                       <TrialSheet
                         taskId={t.taskId}
                         prompt={t.prompt}
-                        trials={r.trials.filter((x) => x.taskId === t.taskId)}
+                        trials={forClient(
+                          r.trials.filter((x) => x.taskId === t.taskId),
+                        )}
                       />
                     </TableCell>
                   </TableRow>

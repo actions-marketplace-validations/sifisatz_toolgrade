@@ -70,6 +70,11 @@ async function Compare({
   ]);
   const cmp =
     head && before ? compareRuns(before.report, head.report) : undefined;
+  // A run picked by URL may be older than the listed window; keep it selectable so the form
+  // never silently submits a different run.
+  const options = [...runs];
+  for (const r of [before, head])
+    if (r && !options.some((o) => o.id === r.id)) options.push(r);
 
   return (
     <>
@@ -91,14 +96,19 @@ async function Compare({
             <RunSelect
               name="base"
               label="Before"
-              runs={runs}
+              runs={options}
               value={before?.id}
             />
             <ArrowRight
               className="mb-2 size-4 text-muted-foreground"
               aria-hidden
             />
-            <RunSelect name="head" label="After" runs={runs} value={head?.id} />
+            <RunSelect
+              name="head"
+              label="After"
+              runs={options}
+              value={head?.id}
+            />
             <Button type="submit">Compare</Button>
           </form>
         </CardContent>
@@ -149,7 +159,8 @@ async function Compare({
                 </div>
                 {cmp.unmatched.length > 0 && (
                   <div className="mt-2 text-xs text-muted-foreground">
-                    Excluded, not in both runs: {cmp.unmatched.join(", ")}
+                    Excluded, not graded in both runs:{" "}
+                    {cmp.unmatched.join(", ")}
                   </div>
                 )}
               </CardContent>

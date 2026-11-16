@@ -83,7 +83,9 @@ export function Lift({
 }) {
   if (value === null || value === undefined)
     return <span className="text-muted-foreground">-</span>;
-  const Icon = value > 0 ? TrendingUp : value < 0 ? TrendingDown : null;
+  // Direction follows the rounded figure shown, so "+0pp" never carries an arrow.
+  const shown = Math.round(value * 100);
+  const Icon = shown > 0 ? TrendingUp : shown < 0 ? TrendingDown : null;
   return (
     <span
       className={cn("inline-flex items-center gap-1 tabular-nums", className)}
@@ -92,12 +94,12 @@ export function Lift({
         <Icon
           className={cn(
             "size-3.5",
-            value > 0 ? "text-status-good" : "text-status-critical",
+            shown > 0 ? "text-status-good" : "text-status-critical",
           )}
           aria-hidden
         />
       )}
-      {signedPct(value)}
+      {shown === 0 ? "0pp" : signedPct(value)}
     </span>
   );
 }

@@ -104,8 +104,8 @@ function TrialCard({ trial }: { trial: TrialResult }) {
         {t && (
           <div className="flex items-center gap-3 text-xs text-muted-foreground tabular-nums">
             <span className="inline-flex items-center gap-1">
-              <Wrench className="size-3.5" aria-hidden /> {t.toolCalls.length}{" "}
-              calls
+              <Wrench className="size-3.5" aria-hidden />{" "}
+              {(t.toolCalls ?? []).length} calls
             </span>
             <span>{t.turns} turns</span>
             <span className="inline-flex items-center gap-1">
@@ -127,7 +127,7 @@ function TrialCard({ trial }: { trial: TrialResult }) {
             Assertions
           </h4>
           <ul className="space-y-1">
-            {trial.assertions.map((a, i) => (
+            {(trial.assertions ?? []).map((a, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: immutable list from a stored report; position is the identity
               <li key={i} className="flex gap-2">
                 {a.passed ? (
@@ -147,7 +147,7 @@ function TrialCard({ trial }: { trial: TrialResult }) {
                 </span>
               </li>
             ))}
-            {trial.skipped.map((s, i) => (
+            {(trial.skipped ?? []).map((s, i) => (
               // biome-ignore lint/suspicious/noArrayIndexKey: immutable list from a stored report; position is the identity
               <li key={`s${i}`} className="flex gap-2 text-muted-foreground">
                 <CircleSlash
@@ -163,13 +163,13 @@ function TrialCard({ trial }: { trial: TrialResult }) {
           </ul>
         </section>
 
-        {t && t.toolCalls.length > 0 && (
+        {t && (t.toolCalls ?? []).length > 0 && (
           <section>
             <h4 className="mb-1.5 text-xs font-medium tracking-wide text-muted-foreground uppercase">
               Trajectory
             </h4>
             <ol className="space-y-2">
-              {t.toolCalls.map((c, i) => (
+              {(t.toolCalls ?? []).map((c, i) => (
                 // biome-ignore lint/suspicious/noArrayIndexKey: call order is the identity of a trajectory step
                 <li key={i} className="rounded-md border bg-muted/30">
                   <div className="flex items-center justify-between gap-2 px-2.5 py-1.5 font-mono text-xs">
