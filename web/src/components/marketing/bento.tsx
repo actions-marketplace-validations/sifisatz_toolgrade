@@ -13,10 +13,11 @@ import { wilson } from "toolgrade/core";
 import { InView, Spotlight } from "./primitives";
 import { SectionHeading } from "./section-heading";
 
-// Pass rates of the 12 runs in the demo workspace (engine output, simulated agent), oldest first.
-// Run 8 is the "shorten tool descriptions" commit that ToolGrade flagged as a regression.
+// Pass rates of the 12 runs in the live demo workspace at toolgrade.vercel.app (engine output,
+// simulated agent; seeded 2026-11-16), oldest first. Run 8 is the "shorten tool descriptions"
+// commit that ToolGrade flagged as a regression.
 const DEMO_HISTORY = [
-  0.56, 0.83, 0.67, 0.83, 0.94, 0.94, 0.72, 0.33, 0.89, 0.94, 0.94, 1,
+  0.56, 0.83, 0.61, 0.78, 0.89, 0.83, 0.83, 0.28, 0.78, 0.89, 0.94, 0.94,
 ];
 const TASKS = 6;
 
@@ -223,7 +224,7 @@ function TrendVisual() {
         viewBox={`0 0 ${w} ${h}`}
         className="h-40 w-full overflow-visible"
         role="img"
-        aria-label="Pass rate over 12 demo runs, dipping to 33% on run 8 and recovering to 100%"
+        aria-label="Pass rate over 12 demo runs, dipping to 28% on run 8 and recovering to 94%"
       >
         {[0.25, 0.5, 0.75].map((t) => (
           <line
