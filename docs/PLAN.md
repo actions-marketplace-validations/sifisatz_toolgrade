@@ -27,12 +27,14 @@ tests for their code.
 
 1. **Baseline or it did not happen.** Every task runs in two arms - with tools, and with no
    tools. The product headline is the *lift*, not the raw pass rate. A tool that does not beat
-   the baseline is a cost (tokens, latency, confusion), not a feature.
+   the baseline is a cost (tokens, latency, confusion), not a feature. The baseline is graded on
+   outcome assertions only - grading it on "did it call the tool" would make lift meaningless.
 2. **Grade outcomes, not claims.** Agents say "done" when they are not. Assertions can query
    the server's real state after the run (`state` assertion), not just read the transcript.
 3. **Variance is a first-class output.** Agents are stochastic. Every task runs N trials;
    pass rates come with 95% Wilson intervals, lift with a Newcombe interval, and the
-   regression gate distinguishes "significantly worse" from "inconclusive - run more trials".
+   regression gate distinguishes "significantly worse" from "inconclusive". Trials of one task
+   are correlated, so suite-level intervals use tasks, not trials, as the sample size.
 4. **Deterministic checks first, LLM judge last.** Cheap, exact assertions (tool called,
    arguments, output contains, end state) carry the weight; the LLM judge is reserved for
    open-ended quality and is itself tracked for cost.

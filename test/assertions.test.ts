@@ -13,7 +13,6 @@ const trajectory: Trajectory = {
   ],
   turns: 3,
   stopReason: "end_turn",
-  truncated: false,
   inputTokens: 10,
   outputTokens: 5,
   durationMs: 10,

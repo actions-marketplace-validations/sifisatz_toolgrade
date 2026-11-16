@@ -1,11 +1,11 @@
-import { runAgent, toAnthropicTools, type Trajectory } from "./agent.js";
+import { AgentRunError, runAgent, toAnthropicTools, type Trajectory, type Usage } from "./agent.js";
 import { evaluateAll, type AssertionResult } from "./assertions.js";
-import type { Suite, TaskSpec } from "./config.js";
+import { isOutcomeAssertion, type AssertionSpec, type Suite, type TaskSpec } from "./config.js";
 import { LlmJudge } from "./judge.js";
 import { openSession as defaultOpenSession, type McpSession } from "./mcp.js";
 import { CostModel } from "./pricing.js";
 import type { ModelProvider } from "./providers/types.js";
-import { difference, rate, significance, type Difference, type Rate, type Significance } from "./stats.js";
+import { difference, rate, significance, taskLevelRate, type Difference, type Rate, type Significance } from "./stats.js";
 
 export type Arm = "tools" | "baseline";
 
@@ -15,12 +15,17 @@ export interface TrialResult {
   trial: number;
   passed: boolean;
   assertions: AssertionResult[];
+  /** Process assertions not applied to this arm (baseline is graded on outcomes only). */
+  skipped: AssertionSpec["type"][];
   trajectory?: Trajectory;
+  /** Errored trials are excluded from pass rates and fail the no_errors gate check. */
   error?: string;
+  usage: Usage;
   costUsd: number | null;
 }
 
 export interface ArmSummary {
+  /** Trial-level rate over graded (non-errored) trials. */
   rate: Rate;
   errors: number;
   meanToolCalls: number;
@@ -31,10 +36,18 @@ export interface ArmSummary {
   costUsd: number | null;
 }
 
+export interface OverallArm {
+  /** Task-level rate: mean of per-task rates, n = tasks (see stats.taskLevelRate). */
+  rate: Rate;
+  trials: { passed: number; graded: number; errors: number };
+  costUsd: number | null;
+}
+
 export interface TaskSummary {
   taskId: string;
   tags: string[];
   tools: ArmSummary;
+  /** Absent when the arm did not run or the task has no outcome assertions to grade it on. */
   baseline?: ArmSummary;
   lift?: Difference;
 }
@@ -56,9 +69,18 @@ export interface RunReport {
   trialsPerTask: number;
   toolSurface: { count: number; names: string[]; schemaChars: number; approxTokens: number };
   tasks: TaskSummary[];
-  overall: { tools: ArmSummary; baseline?: ArmSummary; lift?: Difference; liftSignificance?: Significance };
+  overall: {
+    tools: OverallArm;
+    baseline?: OverallArm;
+    /** Computed only over tasks graded in both arms; `liftTasks` says how many. */
+    lift?: Difference;
+    liftTasks?: number;
+    liftSignificance?: Significance;
+  };
   judgeCostUsd: number | null;
   totalCostUsd: number | null;
+  /** True when some trials errored: their failed request may not be counted. */
+  costIsLowerBound: boolean;
   unpricedModels: string[];
   gate: { passed: boolean; checks: GateCheck[] };
   trials: TrialResult[];
@@ -75,6 +97,8 @@ export interface RunOptions {
 }
 
 export class FatalRunError extends Error {}
+
+const ZERO: Usage = { inputTokens: 0, outputTokens: 0 };
 
 export async function runSuite(suite: Suite, opts: RunOptions): Promise<RunReport> {
   const startedAt = new Date().toISOString();
@@ -93,9 +117,12 @@ export async function runSuite(suite: Suite, opts: RunOptions): Promise<RunRepor
   await probe.close();
   const schemaChars = JSON.stringify(anthropicTools).length;
 
-  const arms: Arm[] = withBaseline ? ["tools", "baseline"] : ["tools"];
+  const baselineEligible = (t: TaskSpec) => withBaseline && t.assert.some(isOutcomeAssertion);
   const jobs: Array<{ task: TaskSpec; arm: Arm; trial: number }> = [];
-  for (const task of tasks) for (const arm of arms) for (let i = 1; i <= trials; i++) jobs.push({ task, arm, trial: i });
+  for (const task of tasks) {
+    const arms: Arm[] = baselineEligible(task) ? ["tools", "baseline"] : ["tools"];
+    for (const arm of arms) for (let i = 1; i <= trials; i++) jobs.push({ task, arm, trial: i });
+  }
 
   let done = 0;
   const results = await pool(jobs, opts.concurrency ?? suite.run.concurrency, async ({ task, arm, trial }) => {
@@ -105,21 +132,26 @@ export async function runSuite(suite: Suite, opts: RunOptions): Promise<RunRepor
   });
 
   async function runTrial(task: TaskSpec, arm: Arm, trial: number): Promise<TrialResult> {
+    const graded = arm === "baseline" ? task.assert.filter(isOutcomeAssertion) : task.assert;
+    const skipped = task.assert.filter((a) => !graded.includes(a)).map((a) => a.type);
+    const base = { taskId: task.id, arm, trial, skipped };
     let session: McpSession | undefined;
+    let trajectory: Trajectory | undefined;
     try {
       // Both arms get a fresh server so `state` assertions see an untouched world in the baseline too.
       session = await open(suite.server);
-      const trajectory = await runAgent({
+      trajectory = await runAgent({
         provider: opts.provider,
         model: suite.agent.model,
         prompt: task.prompt,
         system: suite.agent.system,
         maxTurns: suite.agent.max_turns,
         maxTokens: suite.agent.max_tokens,
+        maxToolResultChars: suite.agent.max_tool_result_chars,
         effort: suite.agent.effort,
         session: arm === "tools" ? session : undefined,
       });
-      const assertions = await evaluateAll(task.assert, {
+      const assertions = await evaluateAll(graded, {
         prompt: task.prompt,
         trajectory,
         session,
@@ -129,18 +161,27 @@ export async function runSuite(suite: Suite, opts: RunOptions): Promise<RunRepor
           judgeOut += o;
         },
       });
+      const usage = { inputTokens: trajectory.inputTokens, outputTokens: trajectory.outputTokens };
       return {
-        taskId: task.id,
-        arm,
-        trial,
-        passed: !trajectory.truncated && assertions.every((a) => a.passed),
+        ...base,
+        passed: trajectory.incomplete === undefined && assertions.every((a) => a.passed),
         assertions,
         trajectory,
-        costUsd: costs.cost(suite.agent.model, trajectory.inputTokens, trajectory.outputTokens),
+        usage,
+        costUsd: costs.cost(suite.agent.model, usage.inputTokens, usage.outputTokens),
       };
     } catch (err) {
       if (isFatal(err)) throw new FatalRunError(`Aborting run: ${errorMessage(err)}`);
-      return { taskId: task.id, arm, trial, passed: false, assertions: [], error: errorMessage(err), costUsd: null };
+      const usage = trajectory ?? (err instanceof AgentRunError ? err.usage : ZERO);
+      return {
+        ...base,
+        passed: false,
+        assertions: [],
+        trajectory,
+        error: errorMessage(err),
+        usage: { inputTokens: usage.inputTokens, outputTokens: usage.outputTokens },
+        costUsd: costs.cost(suite.agent.model, usage.inputTokens, usage.outputTokens),
+      };
     } finally {
       await session?.close().catch(() => undefined);
     }
@@ -149,32 +190,37 @@ export async function runSuite(suite: Suite, opts: RunOptions): Promise<RunRepor
   const taskSummaries: TaskSummary[] = tasks.map((task) => {
     const mine = results.filter((r) => r.taskId === task.id);
     const tools = summarize(mine.filter((r) => r.arm === "tools"));
-    const baseline = withBaseline ? summarize(mine.filter((r) => r.arm === "baseline")) : undefined;
-    return { taskId: task.id, tags: task.tags, tools, baseline, lift: baseline ? difference(tools.rate, baseline.rate) : undefined };
+    const baseRuns = mine.filter((r) => r.arm === "baseline");
+    const baseline = baseRuns.length ? summarize(baseRuns) : undefined;
+    const lift = baseline && tools.rate.n > 0 && baseline.rate.n > 0 ? difference(tools.rate, baseline.rate) : undefined;
+    return { taskId: task.id, tags: task.tags, tools, baseline, lift };
   });
 
-  const overallTools = summarize(results.filter((r) => r.arm === "tools"));
-  const overallBaseline = withBaseline ? summarize(results.filter((r) => r.arm === "baseline")) : undefined;
-  const lift = overallBaseline ? difference(overallTools.rate, overallBaseline.rate) : undefined;
-  const judgeCostUsd = judgeIn + judgeOut === 0 ? 0 : costs.cost(suite.judge.model, judgeIn, judgeOut);
-  const totalCostUsd = sumCosts([overallTools.costUsd, overallBaseline?.costUsd ?? 0, judgeCostUsd]);
+  const overallTools = overallArm(taskSummaries, results, "tools");
+  const liftSet = taskSummaries.filter((t) => t.lift);
+  const overallBaseline = withBaseline ? overallArm(taskSummaries.filter((t) => t.baseline), results, "baseline") : undefined;
+  const lift = liftSet.length
+    ? difference(taskLevelRate(liftSet.map((t) => t.tools.rate.rate)), taskLevelRate(liftSet.map((t) => t.baseline!.rate.rate)))
+    : undefined;
 
-  const checks: GateCheck[] = [];
+  const judgeCostUsd = judgeIn + judgeOut === 0 ? 0 : costs.cost(suite.judge.model, judgeIn, judgeOut);
+  const totalCostUsd = sumCosts(results.map((r) => r.costUsd).concat(judgeCostUsd));
   const errors = results.filter((r) => r.error).length;
-  checks.push({ name: "no_errors", passed: errors === 0, detail: `${errors} trial(s) errored` });
+
+  const checks: GateCheck[] = [{ name: "no_errors", passed: errors === 0, detail: `${errors} trial(s) errored` }];
   if (suite.gate.min_pass_rate > 0) {
     checks.push({
       name: "min_pass_rate",
-      passed: overallTools.rate.rate >= suite.gate.min_pass_rate,
+      passed: overallTools.rate.n > 0 && overallTools.rate.rate >= suite.gate.min_pass_rate,
       detail: `pass rate ${pct(overallTools.rate.rate)} vs required ${pct(suite.gate.min_pass_rate)}`,
     });
   }
-  if (suite.gate.min_lift !== undefined && lift) {
-    checks.push({
-      name: "min_lift",
-      passed: lift.delta >= suite.gate.min_lift,
-      detail: `lift ${signedPct(lift.delta)} vs required ${signedPct(suite.gate.min_lift)}`,
-    });
+  if (suite.gate.min_lift !== undefined) {
+    checks.push(
+      lift
+        ? { name: "min_lift", passed: lift.delta >= suite.gate.min_lift, detail: `lift ${signedPct(lift.delta)} vs required ${signedPct(suite.gate.min_lift)}` }
+        : { name: "min_lift", passed: false, detail: "no baseline was graded, so lift cannot be checked" },
+    );
   }
 
   return {
@@ -188,9 +234,16 @@ export async function runSuite(suite: Suite, opts: RunOptions): Promise<RunRepor
     trialsPerTask: trials,
     toolSurface: { count: probe.tools.length, names: probe.tools.map((t) => t.name), schemaChars, approxTokens: Math.round(schemaChars / 4) },
     tasks: taskSummaries,
-    overall: { tools: overallTools, baseline: overallBaseline, lift, liftSignificance: lift ? significance(lift) : undefined },
+    overall: {
+      tools: overallTools,
+      baseline: overallBaseline,
+      lift,
+      liftTasks: lift ? liftSet.length : undefined,
+      liftSignificance: lift ? significance(lift) : undefined,
+    },
     judgeCostUsd,
     totalCostUsd,
+    costIsLowerBound: errors > 0,
     unpricedModels: [...costs.unpriced],
     gate: { passed: checks.every((c) => c.passed), checks },
     trials: results,
@@ -205,17 +258,28 @@ function selectTasks(tasks: TaskSpec[], filter?: string): TaskSpec[] {
 }
 
 function summarize(trials: TrialResult[]): ArmSummary {
-  const ok = trials.map((t) => t.trajectory).filter((t): t is Trajectory => t !== undefined);
+  const graded = trials.filter((t) => !t.error);
+  const ok = graded.map((t) => t.trajectory).filter((t): t is Trajectory => t !== undefined);
   const mean = (f: (t: Trajectory) => number) => (ok.length === 0 ? 0 : ok.reduce((s, t) => s + f(t), 0) / ok.length);
   return {
-    rate: rate(trials.filter((t) => t.passed).length, trials.length),
-    errors: trials.filter((t) => t.error).length,
+    rate: rate(graded.filter((t) => t.passed).length, graded.length),
+    errors: trials.length - graded.length,
     meanToolCalls: mean((t) => t.toolCalls.length),
     meanTurns: mean((t) => t.turns),
     meanInputTokens: mean((t) => t.inputTokens),
     meanOutputTokens: mean((t) => t.outputTokens),
     meanDurationMs: mean((t) => t.durationMs),
-    costUsd: sumCosts(trials.filter((t) => t.trajectory).map((t) => t.costUsd)),
+    costUsd: sumCosts(trials.map((t) => t.costUsd)),
+  };
+}
+
+function overallArm(tasks: TaskSummary[], results: TrialResult[], arm: Arm): OverallArm {
+  const rated = tasks.map((t) => (arm === "tools" ? t.tools : t.baseline)).filter((a): a is ArmSummary => a !== undefined && a.rate.n > 0);
+  const mine = results.filter((r) => r.arm === arm);
+  return {
+    rate: taskLevelRate(rated.map((a) => a.rate.rate)),
+    trials: { passed: mine.filter((r) => r.passed).length, graded: mine.filter((r) => !r.error).length, errors: mine.filter((r) => r.error).length },
+    costUsd: sumCosts(mine.map((r) => r.costUsd)),
   };
 }
 
@@ -223,11 +287,22 @@ function sumCosts(values: Array<number | null>): number | null {
   return values.some((v) => v === null) ? null : values.reduce<number>((s, v) => s + (v ?? 0), 0);
 }
 
-/** Config-level API failures (bad key, unknown model, malformed request) repeat on every trial. */
+/**
+ * Config-level failures (bad key, unknown model, malformed request) repeat on every trial, so
+ * they abort the run. A 400 after the first turn is different: the request grew with tool output
+ * (e.g. prompt too long), which is a property of that trial, not of the configuration.
+ */
 function isFatal(err: unknown): boolean {
-  const e = err as { status?: unknown; fatal?: unknown } | undefined;
+  const inner = err instanceof AgentRunError ? err.cause : err;
+  const e = inner as { status?: unknown; fatal?: unknown; message?: unknown } | undefined;
   if (e?.fatal === true) return true;
-  return typeof e?.status === "number" && [400, 401, 403, 404].includes(e.status);
+  if (typeof e?.status !== "number") return false;
+  if (e.status === 400) {
+    const grewFromTools = err instanceof AgentRunError && err.turn > 1;
+    const tooLong = typeof e.message === "string" && /too long|context|maximum/i.test(e.message);
+    return !grewFromTools && !tooLong;
+  }
+  return [401, 403, 404].includes(e.status);
 }
 
 function errorMessage(err: unknown): string {

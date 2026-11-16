@@ -5,6 +5,8 @@ export interface ScriptedReply {
   text?: string;
   toolUses?: Array<Omit<ToolUse, "id">>;
   usage?: { inputTokens: number; outputTokens: number };
+  /** Defaults to tool_use when tools are requested, else end_turn. */
+  stopReason?: string;
 }
 
 export type Script = (req: TurnRequest) => ScriptedReply;
@@ -28,7 +30,7 @@ export class ScriptedProvider implements ModelProvider {
       content,
       text: reply.text ?? "",
       toolUses,
-      stopReason: toolUses.length > 0 ? "tool_use" : "end_turn",
+      stopReason: reply.stopReason ?? (toolUses.length > 0 ? "tool_use" : "end_turn"),
       usage: reply.usage ?? { inputTokens: 100, outputTokens: 20 },
     };
   }

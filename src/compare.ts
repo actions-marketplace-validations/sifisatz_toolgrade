@@ -1,45 +1,50 @@
 import type { RunReport } from "./runner.js";
-import { difference, significance, type Difference, type Significance } from "./stats.js";
+import { bonferroniZ, difference, rate, significance, taskLevelRate, type Difference, type Significance } from "./stats.js";
 
 export interface TaskComparison {
   taskId: string;
   before: number;
   after: number;
   diff: Difference;
+  /** Bonferroni-corrected across all compared tasks, so big suites do not cry wolf. */
   significance: Significance;
 }
 
 export interface Comparison {
   verdict: "regressed" | "improved" | "no_significant_change";
-  overall: { before: number; after: number; diff: Difference; significance: Significance };
+  /** Over matched tasks only, task-level (n = tasks), so different task sets never get mixed. */
+  overall: { before: number; after: number; tasks: number; diff: Difference; significance: Significance };
   tasks: TaskComparison[];
-  /** Tasks present in only one of the two runs; compared runs should share a suite. */
+  /** Tasks present (and graded) in only one of the two runs; excluded from every number above. */
   unmatched: string[];
 }
 
 export function compareRuns(before: RunReport, after: RunReport): Comparison {
-  const diff = difference(after.overall.tools.rate, before.overall.tools.rate);
-  const overallSig = significance(diff);
-  const beforeTasks = new Map(before.tasks.map((t) => [t.taskId, t]));
-  const afterIds = new Set(after.tasks.map((t) => t.taskId));
+  const graded = (r: RunReport) => new Map(r.tasks.filter((t) => t.tools.rate.n > 0).map((t) => [t.taskId, t.tools.rate]));
+  const b = graded(before);
+  const a = graded(after);
+  const matched = [...a.keys()].filter((id) => b.has(id));
+  const unmatched = [...b.keys(), ...a.keys()].filter((id) => !(b.has(id) && a.has(id)));
 
-  const tasks: TaskComparison[] = [];
-  for (const t of after.tasks) {
-    const prev = beforeTasks.get(t.taskId);
-    if (!prev) continue;
-    const d = difference(t.tools.rate, prev.tools.rate);
-    tasks.push({ taskId: t.taskId, before: prev.tools.rate.rate, after: t.tools.rate.rate, diff: d, significance: significance(d) });
-  }
-  const unmatched = [
-    ...before.tasks.filter((t) => !afterIds.has(t.taskId)).map((t) => t.taskId),
-    ...after.tasks.filter((t) => !beforeTasks.has(t.taskId)).map((t) => t.taskId),
-  ];
+  const z = bonferroniZ(matched.length);
+  const tasks: TaskComparison[] = matched.map((id) => {
+    const prev = b.get(id)!;
+    const next = a.get(id)!;
+    const diff = difference(rate(next.passes, next.n, z), rate(prev.passes, prev.n, z));
+    return { taskId: id, before: prev.rate, after: next.rate, diff, significance: significance(diff) };
+  });
+
+  const beforeRate = taskLevelRate(matched.map((id) => b.get(id)!.rate));
+  const afterRate = taskLevelRate(matched.map((id) => a.get(id)!.rate));
+  const diff = difference(afterRate, beforeRate);
+  const overallSig = significance(diff);
 
   const anyWorse = overallSig === "worse" || tasks.some((t) => t.significance === "worse");
-  const verdict = anyWorse ? "regressed" : overallSig === "better" ? "improved" : "no_significant_change";
+  const anyBetter = overallSig === "better" || tasks.some((t) => t.significance === "better");
+  const verdict = anyWorse ? "regressed" : anyBetter ? "improved" : "no_significant_change";
   return {
     verdict,
-    overall: { before: before.overall.tools.rate.rate, after: after.overall.tools.rate.rate, diff, significance: overallSig },
+    overall: { before: beforeRate.rate, after: afterRate.rate, tasks: matched.length, diff, significance: overallSig },
     tasks,
     unmatched,
   };

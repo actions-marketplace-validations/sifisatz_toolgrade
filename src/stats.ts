@@ -1,4 +1,4 @@
-const Z95 = 1.959964;
+export const Z95 = 1.959964;
 
 export interface Interval {
   low: number;
@@ -6,6 +6,7 @@ export interface Interval {
 }
 
 export interface Rate extends Interval {
+  /** May be fractional for task-level rates (mean of per-task rates times n). */
   passes: number;
   n: number;
   rate: number;
@@ -22,8 +23,19 @@ export function wilson(passes: number, n: number, z = Z95): Interval {
   return { low: Math.max(0, center - half), high: Math.min(1, center + half) };
 }
 
-export function rate(passes: number, n: number): Rate {
-  return { passes, n, rate: n === 0 ? 0 : passes / n, ...wilson(passes, n) };
+export function rate(passes: number, n: number, z = Z95): Rate {
+  return { passes, n, rate: n === 0 ? 0 : passes / n, ...wilson(passes, n, z) };
+}
+
+/**
+ * Suite-level rate from per-task pass rates, with the number of tasks as the effective sample
+ * size. Trials of one task are strongly correlated, so pooling them as independent would make
+ * the interval far too narrow; treating each task as one observation is the conservative bound.
+ */
+export function taskLevelRate(taskRates: number[], z = Z95): Rate {
+  const n = taskRates.length;
+  const mean = n === 0 ? 0 : taskRates.reduce((s, r) => s + r, 0) / n;
+  return rate(mean * n, n, z);
 }
 
 export interface Difference extends Interval {
@@ -44,4 +56,26 @@ export function significance(d: Difference): Significance {
   if (d.low > 0) return "better";
   if (d.high < 0) return "worse";
   return "not_significant";
+}
+
+/** Two-sided z for family-wise alpha split over k comparisons (Bonferroni). */
+export function bonferroniZ(k: number, alpha = 0.05): number {
+  return probit(1 - alpha / (2 * Math.max(1, k)));
+}
+
+/** Inverse standard normal CDF (Acklam's rational approximation, |error| < 1.2e-9). */
+export function probit(p: number): number {
+  if (p <= 0 || p >= 1) throw new RangeError("probit needs 0 < p < 1");
+  const a = [-39.69683028665376, 220.9460984245205, -275.9285104469687, 138.357751867269, -30.66479806614716, 2.506628277459239];
+  const b = [-54.47609879822406, 161.5858368580409, -155.6989798598866, 66.80131188771972, -13.28068155288572];
+  const c = [-0.007784894002430293, -0.3223964580411365, -2.400758277161838, -2.549732539343734, 4.374664141464968, 2.938163982698783];
+  const d = [0.007784695709041462, 0.3224671290700398, 2.445134137142996, 3.754408661907416];
+  const lowTail = 0.02425;
+  const tail = (q: number) =>
+    (((((c[0]! * q + c[1]!) * q + c[2]!) * q + c[3]!) * q + c[4]!) * q + c[5]!) / ((((d[0]! * q + d[1]!) * q + d[2]!) * q + d[3]!) * q + 1);
+  if (p < lowTail) return tail(Math.sqrt(-2 * Math.log(p)));
+  if (p > 1 - lowTail) return -tail(Math.sqrt(-2 * Math.log(1 - p)));
+  const q = p - 0.5;
+  const r = q * q;
+  return ((((((a[0]! * r + a[1]!) * r + a[2]!) * r + a[3]!) * r + a[4]!) * r + a[5]!) * q) / (((((b[0]! * r + b[1]!) * r + b[2]!) * r + b[3]!) * r + b[4]!) * r + 1);
 }

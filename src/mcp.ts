@@ -66,6 +66,32 @@ async function listAllTools(client: Client): Promise<McpTool[]> {
   return tools;
 }
 
+interface ContentPart {
+  type: string;
+  text?: string;
+  mimeType?: string;
+  uri?: string;
+  resource?: { uri?: string; text?: string; mimeType?: string };
+}
+
+// Binary payloads become short placeholders: base64 inlined as text would blow up the context
+// and grade nothing. Image blocks are not forwarded to the model in this version.
+function describeContent(c: ContentPart): string {
+  switch (c.type) {
+    case "text":
+      return c.text ?? "";
+    case "image":
+    case "audio":
+      return `[${c.type} content: ${c.mimeType ?? "unknown type"}, not shown]`;
+    case "resource":
+      return c.resource?.text ?? `[embedded resource ${c.resource?.uri ?? ""} (${c.resource?.mimeType ?? "binary"}), not shown]`;
+    case "resource_link":
+      return `[resource link: ${c.uri ?? ""}]`;
+    default:
+      return `[${c.type} content, not shown]`;
+  }
+}
+
 async function callTool(
   client: Client,
   name: string,
@@ -74,9 +100,7 @@ async function callTool(
   try {
     const result = await client.callTool({ name, arguments: args });
     const content = Array.isArray(result.content) ? result.content : [];
-    const text = content
-      .map((c: { type: string; text?: string }) => (c.type === "text" ? (c.text ?? "") : JSON.stringify(c)))
-      .join("\n");
+    const text = content.map(describeContent).join("\n");
     return { text, isError: result.isError === true };
   } catch (err) {
     return { text: `Tool call failed: ${err instanceof Error ? err.message : String(err)}`, isError: true };

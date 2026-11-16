@@ -75,6 +75,7 @@ export const SuiteSchema = z.object({
       system: z.string().optional(),
       max_turns: z.number().int().min(1).default(10),
       max_tokens: z.number().int().min(256).default(16000),
+      max_tool_result_chars: z.number().int().min(100).default(20000),
       effort: z.enum(["low", "medium", "high", "xhigh", "max"]).optional(),
     })
     .prefault({}),
@@ -101,6 +102,16 @@ export type ServerSpec = Suite["server"];
 export type StdioServerSpec = z.infer<typeof StdioServer>;
 export type TaskSpec = z.infer<typeof Task>;
 export type AssertionSpec = z.infer<typeof Assertion>;
+
+/**
+ * Outcome assertions judge what the agent achieved; process assertions judge how it used tools.
+ * The no-tool baseline is graded on outcomes only, otherwise lift would just mean "used tools".
+ */
+const OUTCOME_TYPES = new Set<AssertionSpec["type"]>(["output_contains", "output_regex", "state", "llm"]);
+
+export function isOutcomeAssertion(a: AssertionSpec): boolean {
+  return OUTCOME_TYPES.has(a.type);
+}
 
 export function isStdio(server: ServerSpec): server is StdioServerSpec {
   return "command" in server;

@@ -1,5 +1,25 @@
 import { describe, expect, it } from "vitest";
-import { difference, rate, significance, wilson } from "../src/stats.js";
+import { bonferroniZ, difference, probit, rate, significance, taskLevelRate, wilson } from "../src/stats.js";
+
+describe("probit / bonferroniZ", () => {
+  it("matches standard normal quantiles", () => {
+    expect(probit(0.975)).toBeCloseTo(1.959964, 5);
+    expect(probit(0.5)).toBeCloseTo(0, 9);
+    expect(probit(0.005)).toBeCloseTo(-2.575829, 5);
+    expect(bonferroniZ(1)).toBeCloseTo(1.959964, 5);
+    expect(bonferroniZ(10)).toBeCloseTo(2.807034, 5);
+  });
+});
+
+describe("taskLevelRate", () => {
+  it("uses tasks, not trials, as the sample size", () => {
+    const r = taskLevelRate([1, 1, 0.5]);
+    expect(r.n).toBe(3);
+    expect(r.rate).toBeCloseTo(2.5 / 3, 9);
+    // Much wider than pooling 3 tasks x 10 trials = 25/30 as independent.
+    expect(r.high - r.low).toBeGreaterThan(wilson(25, 30).high - wilson(25, 30).low);
+  });
+});
 
 describe("wilson", () => {
   it("matches reference values", () => {

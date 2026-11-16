@@ -20,19 +20,20 @@ delete-note          100% (3/3)  0% (0/3)    +100pp  2.0
 no-tool-needed       100% (3/3)  100% (3/3)  +0pp    0.0
 summarize-plan       100% (3/3)  0% (0/3)    +100pp  2.0
 
-Pass rate (tools)  100%  95% CI 82%-100%
-Pass rate (none)   17%  95% CI 6%-39%
-Lift               +83pp  95% CI +55pp..+94pp  significant
+Pass rate (tools)  100% over 6 tasks (18/18 trials)  95% CI 61%-100%
+Pass rate (none)   17% over 6 tasks (3/18 trials)  95% CI 3%-56%  outcome assertions only
+Lift               +83pp  95% CI +28pp..+97pp  significant
 Gate passed
 
 ToolGrade - notes-server (vague tools)      <- same agent, vague descriptions, worse search
-Pass rate (tools)  33%  95% CI 16%-56%
-Lift               +17pp  95% CI -12pp..+42pp  not significant - add trials
+Pass rate (tools)  33% over 6 tasks (6/18 trials)  95% CI 10%-70%
+Lift               +17pp  95% CI -30pp..+56pp  not significant - add tasks
 FAIL min_pass_rate: pass rate 33% vs required 80%
 Gate failed
 
 Comparison: regressed
-overall 100% -> 33%  -67pp  95% CI -84pp..-38pp
+overall over 6 matched tasks 100% -> 33%  -67pp  95% CI -90pp..-13pp
+per-task verdicts are Bonferroni-corrected
   find-owner                   100% ->   0%  worse
   create-note                  100% -> 100%  ~
   delete-note                  100% ->   0%  worse
@@ -41,7 +42,8 @@ overall 100% -> 33%  -67pp  95% CI -84pp..-38pp
 ## Why
 
 - **Baseline or it did not happen.** A tool that does not beat "no tools" is a cost (schema
-  tokens, latency, distraction), not a feature. The headline metric is the lift.
+  tokens, latency, distraction), not a feature. The headline metric is the lift. The baseline is
+  graded on *outcome* assertions only, so lift means "better results", not "used tools".
 - **Grade outcomes, not claims.** `state` assertions query your server after the run, so an
   agent that *says* it deleted the note but did not, fails.
 - **Variance is reported, not hidden.** Wilson intervals on pass rates, a Newcombe interval on
@@ -88,7 +90,7 @@ server:                      # stdio (fresh process per trial) ...
   env: { DATABASE_URL: "postgres://localhost/test" }
 # server: { url: https://localhost:3000/mcp, headers: { Authorization: "Bearer test" } }
 
-agent:  { model: claude-opus-5, max_turns: 10, effort: medium, system: "optional" }
+agent:  { model: claude-opus-5, max_turns: 10, effort: medium, max_tool_result_chars: 20000, system: "optional" }
 judge:  { model: claude-sonnet-5 }
 run:    { trials: 3, baseline: true, concurrency: 4 }
 gate:   { min_pass_rate: 0.8, min_lift: 0.3 }
@@ -113,9 +115,21 @@ tasks:
 | `state` | after the run, calling `tool` with `args` returns text containing `contains` and none of `not_contains` |
 | `llm` | the judge model, given task, tool trace and answer, says the `rubric` is met (structured JSON verdict; unparseable = fail) |
 
-A trial that hits `max_turns` fails regardless of assertions. Trials that error count as
-failures and fail the `no_errors` gate check. Configuration-level API errors (bad key, unknown
-model, malformed request) abort the run instead of producing a meaningless score.
+`output_*`, `state` and `llm` are **outcome** assertions; `tool_called`, `tool_not_called` and
+`max_tool_calls` are **process** assertions. The baseline arm is graded on outcomes only (process
+assertions are recorded as skipped); a task with no outcome assertions has no baseline.
+
+A trial that does not end normally - `max_turns`, `max_tokens`, `refusal`, context exceeded -
+fails regardless of assertions, and only the last turn's text counts as the answer. Trials that
+error (rate limits, overload, a request that grew too long from tool output) are excluded from
+pass rates, reported separately, and fail the `no_errors` gate check; their spend is kept and
+the total is marked as a lower bound. Configuration-level API errors (bad key, unknown model,
+malformed first request) abort the run instead of producing a meaningless score. Tool results
+are capped at `max_tool_result_chars` before they reach the model, and binary content (images,
+audio, blob resources) is replaced by a placeholder.
+
+The LLM judge sees tool calls and the answer inside randomly named tags it is told to treat as
+untrusted data, so an agent or server cannot close the block and rewrite the rubric.
 
 Write `state` probes that work across every server variant you compare - a probe that depends on
 the behaviour under test can pass for the wrong reason.
@@ -137,9 +151,13 @@ See [examples/github-workflow.yml](examples/github-workflow.yml) and [action.yml
 
 ## Statistics notes
 
-Pass rates pool all trials of an arm and use a 95% Wilson interval; lift uses Newcombe's hybrid
-score interval. Trials of the same task are correlated, so with few tasks the intervals are
-optimistic - prefer more tasks over more trials when you can. Cost uses list prices from
+Trials of the same task are strongly correlated, so suite-level numbers treat **each task as one
+observation**: the pass rate is the mean of per-task rates, with a 95% Wilson interval at
+n = tasks, and lift is the Newcombe hybrid score interval over the tasks graded in both arms.
+This is deliberately conservative: more trials make each task's rate more precise, but only
+more tasks tighten the suite-level interval. Per-task rates use trials as the sample. `compare`
+uses only tasks present in both runs and Bonferroni-corrects its per-task verdicts, so a large
+suite does not produce false regressions by chance. Cost uses list prices from
 [src/pricing.ts](src/pricing.ts); unknown models are reported as `n/a` rather than guessed.
 
 ## Roadmap

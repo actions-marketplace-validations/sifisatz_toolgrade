@@ -1,13 +1,15 @@
 import pc from "picocolors";
 import type { Comparison } from "./compare.js";
 import type { LintIssue } from "./lint.js";
-import { pct, signedPct, type ArmSummary, type RunReport } from "./runner.js";
+import { pct, signedPct, type ArmSummary, type OverallArm, type RunReport } from "./runner.js";
 import type { Difference, Rate } from "./stats.js";
 
 const ci = (r: Rate) => `${pct(r.low)}-${pct(r.high)}`;
 const ciDiff = (d: Difference) => `${signedPct(d.low)}..${signedPct(d.high)}`;
 const usd = (v: number | null) => (v === null ? "n/a" : `$${v.toFixed(v < 1 ? 4 : 2)}`);
-const rateCell = (a: ArmSummary) => `${pct(a.rate.rate)} (${a.rate.passes}/${a.rate.n})`;
+const rateCell = (a: ArmSummary) => `${pct(a.rate.rate)} (${a.rate.passes}/${a.rate.n})${a.errors ? ` +${a.errors} err` : ""}`;
+const overallCell = (a: OverallArm) => `${pct(a.rate.rate)} over ${a.rate.n} tasks (${a.trials.passed}/${a.trials.graded} trials)`;
+const cost = (r: RunReport) => `${usd(r.totalCostUsd)}${r.costIsLowerBound ? " (lower bound: some trials errored)" : ""}`;
 
 export function formatTerminal(r: RunReport): string {
   const lines: string[] = [];
@@ -29,13 +31,14 @@ export function formatTerminal(r: RunReport): string {
   lines.push("");
 
   const o = r.overall;
-  lines.push(`${pc.bold("Pass rate (tools)")}  ${colorRate(o.tools.rate.rate, pct(o.tools.rate.rate))}  95% CI ${ci(o.tools.rate)}`);
+  lines.push(`${pc.bold("Pass rate (tools)")}  ${colorRate(o.tools.rate.rate, overallCell(o.tools))}  95% CI ${ci(o.tools.rate)}`);
   if (o.baseline && o.lift) {
-    lines.push(`${pc.bold("Pass rate (none) ")}  ${pct(o.baseline.rate.rate)}  95% CI ${ci(o.baseline.rate)}`);
-    const sig = o.liftSignificance === "better" ? pc.green("significant") : o.liftSignificance === "worse" ? pc.red("significantly worse") : pc.yellow("not significant - add trials");
+    lines.push(`${pc.bold("Pass rate (none) ")}  ${overallCell(o.baseline)}  95% CI ${ci(o.baseline.rate)}  ${pc.dim("outcome assertions only")}`);
+    const sig = o.liftSignificance === "better" ? pc.green("significant") : o.liftSignificance === "worse" ? pc.red("significantly worse") : pc.yellow("not significant - add tasks");
     lines.push(`${pc.bold("Lift             ")}  ${colorLift(o.lift.delta, signedPct(o.lift.delta))}  95% CI ${ciDiff(o.lift)}  ${sig}`);
   }
-  lines.push(`${pc.bold("Cost             ")}  ${usd(r.totalCostUsd)} total (judge ${usd(r.judgeCostUsd)})`);
+  if (o.lift && o.liftTasks !== r.tasks.length) lines.push(pc.dim(`  lift over the ${o.liftTasks} task(s) graded in both arms`));
+  lines.push(`${pc.bold("Cost             ")}  ${cost(r)} total (judge ${usd(r.judgeCostUsd)})`);
   if (r.unpricedModels.length) lines.push(pc.yellow(`No price for: ${r.unpricedModels.join(", ")} - add them under pricing: in the suite`));
 
   const failures = r.trials.filter((t) => !t.passed && t.arm === "tools").slice(0, 8);
@@ -43,7 +46,7 @@ export function formatTerminal(r: RunReport): string {
     lines.push("");
     lines.push(pc.bold("Failures (with tools)"));
     for (const f of failures) {
-      const why = f.error ?? (f.trajectory?.truncated ? "hit max_turns" : f.assertions.filter((a) => !a.passed).map((a) => `${a.type}: ${a.detail}`).join("; "));
+      const why = f.error ?? (f.trajectory?.incomplete ? `incomplete: ${f.trajectory.incomplete}` : f.assertions.filter((a) => !a.passed).map((a) => `${a.type}: ${a.detail}`).join("; "));
       lines.push(`  ${pc.red("x")} ${f.taskId}#${f.trial}  ${pc.dim(why)}`);
     }
   }
@@ -63,9 +66,9 @@ export function formatMarkdown(r: RunReport, cmp?: Comparison): string {
   out.push("");
   out.push("| | Pass rate | 95% CI |");
   out.push("|---|---|---|");
-  out.push(`| With tools | ${pct(o.tools.rate.rate)} | ${ci(o.tools.rate)} |`);
+  out.push(`| With tools | ${overallCell(o.tools)} | ${ci(o.tools.rate)} |`);
   if (o.baseline && o.lift) {
-    out.push(`| No tools (baseline) | ${pct(o.baseline.rate.rate)} | ${ci(o.baseline.rate)} |`);
+    out.push(`| No tools (baseline, outcomes only) | ${overallCell(o.baseline)} | ${ci(o.baseline.rate)} |`);
     out.push(`| **Lift** | **${signedPct(o.lift.delta)}** | ${ciDiff(o.lift)} (${o.liftSignificance?.replace("_", " ")}) |`);
   }
   out.push("");
@@ -82,13 +85,14 @@ export function formatMarkdown(r: RunReport, cmp?: Comparison): string {
     for (const t of moved) out.push(`- \`${t.taskId}\`: ${pct(t.before)} -> ${pct(t.after)} (${t.significance})`);
   }
   out.push("");
-  out.push(`Cost: ${usd(r.totalCostUsd)}. Gate: ${r.gate.checks.map((c) => `${c.name} ${c.passed ? "ok" : "FAILED"}`).join(", ")}.`);
+  out.push(`Cost: ${cost(r)}. Gate: ${r.gate.checks.map((c) => `${c.name} ${c.passed ? "ok" : "FAILED"}`).join(", ")}.`);
   return out.join("\n");
 }
 
 export function formatComparison(cmp: Comparison): string {
   const lines = [pc.bold(`Comparison: ${cmp.verdict.replaceAll("_", " ")}`)];
-  lines.push(`overall ${pct(cmp.overall.before)} -> ${pct(cmp.overall.after)}  ${signedPct(cmp.overall.diff.delta)}  95% CI ${ciDiff(cmp.overall.diff)}`);
+  lines.push(`overall over ${cmp.overall.tasks} matched tasks ${pct(cmp.overall.before)} -> ${pct(cmp.overall.after)}  ${signedPct(cmp.overall.diff.delta)}  95% CI ${ciDiff(cmp.overall.diff)}`);
+  lines.push(pc.dim("per-task verdicts are Bonferroni-corrected"));
   for (const t of cmp.tasks) {
     const tag = t.significance === "worse" ? pc.red("worse") : t.significance === "better" ? pc.green("better") : pc.dim("~");
     lines.push(`  ${t.taskId.padEnd(28)} ${pct(t.before).padStart(4)} -> ${pct(t.after).padStart(4)}  ${tag}`);

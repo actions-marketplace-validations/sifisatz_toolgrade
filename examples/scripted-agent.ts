@@ -19,7 +19,7 @@ const idIn = (s: string | undefined) => /^(n\d+) \|/m.exec(s ?? "")?.[1];
  */
 export function notesAgent(req: TurnRequest): ScriptedReply {
   if (req.jsonSchema) {
-    const answer = /<final_answer>\n([\s\S]*)\n<\/final_answer>/.exec(firstUserText(req))?.[1] ?? "";
+    const answer = /<data-[0-9a-f]+-final-answer>\n([\s\S]*)\n<\/data-[0-9a-f]+-final-answer>/.exec(firstUserText(req))?.[1] ?? "";
     const passed = /engineers/i.test(answer) && /billing v2/i.test(answer);
     return { text: JSON.stringify({ reasoning: passed ? "both goals stated" : "goals missing", passed }) };
   }
