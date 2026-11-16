@@ -1,8 +1,8 @@
 import pc from "picocolors";
 import type { Comparison } from "./compare.js";
 import type { LintIssue } from "./lint.js";
-import { pct, signedPct, type ArmSummary, type OverallArm, type RunReport } from "./runner.js";
-import type { Difference, Rate } from "./stats.js";
+import type { ArmSummary, OverallArm, RunReport } from "./runner.js";
+import { pct, signedPct, type Difference, type Rate } from "./stats.js";
 
 const ci = (r: Rate) => `${pct(r.low)}-${pct(r.high)}`;
 const ciDiff = (d: Difference) => `${signedPct(d.low)}..${signedPct(d.high)}`;

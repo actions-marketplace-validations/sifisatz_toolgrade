@@ -6,7 +6,7 @@ import { LlmJudge } from "./judge.js";
 import { openSession as defaultOpenSession, type McpSession } from "./mcp.js";
 import { CostModel } from "./pricing.js";
 import type { ModelProvider } from "./providers/types.js";
-import { difference, rate, significance, taskLevelRate, type Difference, type Rate, type Significance } from "./stats.js";
+import { difference, pct, rate, significance, signedPct, taskLevelRate, type Difference, type Rate, type Significance } from "./stats.js";
 
 export type Arm = "tools" | "baseline";
 
@@ -46,6 +46,7 @@ export interface OverallArm {
 
 export interface TaskSummary {
   taskId: string;
+  prompt: string;
   tags: string[];
   tools: ArmSummary;
   /** Absent when the arm did not run or the task has no outcome assertions to grade it on. */
@@ -196,7 +197,7 @@ export async function runSuite(suite: Suite, opts: RunOptions): Promise<RunRepor
     const baseRuns = mine.filter((r) => r.arm === "baseline");
     const baseline = baseRuns.length ? summarize(baseRuns) : undefined;
     const lift = baseline && tools.rate.n > 0 && baseline.rate.n > 0 ? difference(tools.rate, baseline.rate) : undefined;
-    return { taskId: task.id, tags: task.tags, tools, baseline, lift };
+    return { taskId: task.id, prompt: task.prompt, tags: task.tags, tools, baseline, lift };
   });
 
   const overallTools = overallArm(taskSummaries, results, "tools");
@@ -330,6 +331,3 @@ async function pool<T, R>(items: T[], size: number, fn: (item: T) => Promise<R>)
   if (failed !== undefined) throw failed;
   return out;
 }
-
-export const pct = (x: number) => `${Math.round(x * 100)}%`;
-export const signedPct = (x: number) => `${x >= 0 ? "+" : ""}${Math.round(x * 100)}pp`;

@@ -1,5 +1,8 @@
 export const Z95 = 1.959964;
 
+export const pct = (x: number) => `${Math.round(x * 100)}%`;
+export const signedPct = (x: number) => `${x >= 0 ? "+" : ""}${Math.round(x * 100)}pp`;
+
 export interface Interval {
   low: number;
   high: number;

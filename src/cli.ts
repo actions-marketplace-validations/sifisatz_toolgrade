@@ -12,6 +12,7 @@ import { OpenAICompatibleProvider } from "./providers/openai.js";
 import type { ModelProvider } from "./providers/types.js";
 import { formatComparison, formatLint, formatMarkdown, formatTerminal } from "./report.js";
 import { runSuite, type RunReport } from "./runner.js";
+import { detectGitMeta, uploadReport } from "./upload.js";
 
 const EXIT_GATE_FAILED = 1;
 const EXIT_USAGE = 2;
@@ -43,6 +44,7 @@ program
   .option("--api-key-env <var>", "env var holding the key for --provider openai (Ollama needs none)", "OPENAI_API_KEY")
   .option("-m, --model <id>", "agent model (overrides the suite)")
   .option("--judge-model <id>", "judge model (overrides the suite; defaults to --model when that is given)")
+  .option("--upload <url>", "upload the report to a ToolGrade platform (key from TOOLGRADE_API_KEY)")
   .action(async (suitePath: string, o) => {
     const suite = await loadSuite(suitePath);
     if (o.model) {
@@ -54,6 +56,8 @@ program
     if (o.provider === "openai" && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(o.baseUrl)) {
       for (const m of [suite.agent.model, suite.judge.model]) suite.pricing[m] ??= { input: 0, output: 0 };
     }
+    const apiKey = process.env.TOOLGRADE_API_KEY;
+    if (o.upload && !apiKey) throw new InvalidArgumentError("--upload needs TOOLGRADE_API_KEY (create one in the project's settings)");
     const previous = o.compare ? await readReport(o.compare) : undefined;
     const report = await runSuite(suite, {
       provider: makeProvider(o),
@@ -80,6 +84,10 @@ program
     if (cmp) console.log(`\n${formatComparison(cmp)}`);
     if (o.markdown) await writeFile(o.markdown, formatMarkdown(report, cmp));
     console.log(`\nReport: ${file}`);
+    if (o.upload) {
+      const uploaded = await uploadReport(o.upload, apiKey!, report, await detectGitMeta());
+      console.log(`Uploaded: ${uploaded.url}`);
+    }
 
     if (!report.gate.passed || cmp?.verdict === "regressed") process.exitCode = EXIT_GATE_FAILED;
   });
@@ -127,6 +135,20 @@ program
     } finally {
       await session.close();
     }
+  });
+
+program
+  .command("upload")
+  .description("upload an existing run report to a ToolGrade platform (key from TOOLGRADE_API_KEY)")
+  .argument("<report>", "run report JSON, e.g. .toolgrade/runs/latest.json")
+  .requiredOption("--url <url>", "platform origin, e.g. https://app.toolgrade.dev")
+  .option("--message <text>", "label for the run, e.g. the commit message")
+  .action(async (reportPath: string, o) => {
+    const apiKey = process.env.TOOLGRADE_API_KEY;
+    if (!apiKey) throw new InvalidArgumentError("set TOOLGRADE_API_KEY (create one in the project's settings)");
+    const meta = { ...(await detectGitMeta()), ...(o.message ? { commitMessage: o.message } : {}) };
+    const uploaded = await uploadReport(o.url, apiKey, await readReport(reportPath), meta);
+    console.log(`Uploaded: ${uploaded.url}`);
   });
 
 program

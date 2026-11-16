@@ -87,6 +87,14 @@ Localhost endpoints are priced at $0. Hosted endpoints work the same way, e.g.
 more tool-use mistakes than frontier models - expect lower pass rates, which is exactly what
 ToolGrade is there to measure - and a small judge is less reliable on `llm` assertions.
 
+## Platform (dashboard + ingestion API)
+
+`web/` is the hosted side: run history with trend charts, per-task drill-down into every trial's
+tool calls, run-vs-run regression compare, and per-project API keys for CI uploads
+(`toolgrade run ... --upload <url>` or `toolgrade upload <report.json>`). It runs locally with no
+infrastructure - see [web/README.md](web/README.md) and the stack decision in
+[docs/ADR-001-web-stack.md](docs/ADR-001-web-stack.md).
+
 ## Commands
 
 | Command | What it does | Exit code |
@@ -94,6 +102,7 @@ ToolGrade is there to measure - and a small judge is less reliable on `llm` asse
 | `run <suite>` | tasks x {tools, baseline} x trials, then the gate. Writes `.toolgrade/runs/<ts>.json` and `latest.json`. `--compare <report>` fails on a significant regression. `--markdown <file>` for PR comments. | 0 pass, 1 gate failed / regressed, 2 error |
 | `init [-- cmd args...]` / `init --url <url>` | Connects to your server and writes `toolgrade.yaml`: one starter task per tool plus a no-tool control task, and lints the tools. Prompts and rubrics are `TODO:` placeholders you must replace - `run` refuses a suite that still has them. | 2 if the file exists (use `--force`) |
 | `inspect <suite>` | Connects, lists tools, lints names/descriptions/parameter docs. | 1 on lint errors |
+| `upload <report> --url <origin>` | Uploads an existing run report to a ToolGrade platform (`TOOLGRADE_API_KEY`). | 2 on failure |
 | `compare <before> <after>` | Statistical comparison of two run reports. | 1 if regressed |
 
 ## Suite file

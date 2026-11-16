@@ -10,3 +10,4 @@ export type { ModelProvider, TurnRequest, TurnResponse } from "./providers/types
 export { formatMarkdown, formatTerminal } from "./report.js";
 export { runSuite, FatalRunError, type RunReport, type RunOptions, type TrialResult } from "./runner.js";
 export { difference, rate, significance, wilson } from "./stats.js";
+export { detectGitMeta, uploadReport, type RunMeta, type UploadResult } from "./upload.js";
