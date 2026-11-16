@@ -4,32 +4,38 @@ import { and, eq, isNull } from "drizzle-orm";
 import { refresh } from "next/cache";
 import { z } from "zod";
 import { getDb } from "@/db/client";
-import { apiKeys, orgs, projects } from "@/db/schema";
+import { apiKeys, member, organization, projects } from "@/db/schema";
 import { generateApiKey } from "@/lib/api-keys";
+import { getSession, MANAGE_ROLES } from "@/lib/session";
 
-// PoC: the demo workspace has no sign-in, so these actions only check that the project exists
-// in the named org. Production adds a session + org-membership check here (Better Auth).
-// Server actions are public endpoints: every argument is validated before it reaches the DB.
+// Server actions are public endpoints: each one re-checks the session and the caller's role in
+// the project's org itself (the proxy is only a redirect optimisation), and validates every
+// argument before it reaches the database.
 
 const Slug = z.string().regex(/^[a-z0-9][a-z0-9-]{0,62}$/);
 const Target = z.object({ orgSlug: Slug, projectSlug: Slug });
 
-async function findProject(orgSlug: unknown, projectSlug: unknown) {
+/** The project, only if the signed-in user may manage it (owner or admin of its org). */
+async function findManagedProject(orgSlug: unknown, projectSlug: unknown) {
   const target = Target.safeParse({ orgSlug, projectSlug });
   if (!target.success) return undefined;
+  const s = await getSession();
+  if (!s) return undefined;
   const db = await getDb();
   const [row] = await db
-    .select({ id: projects.id })
+    .select({ id: projects.id, role: member.role })
     .from(projects)
-    .innerJoin(orgs, eq(projects.orgId, orgs.id))
+    .innerJoin(organization, eq(projects.orgId, organization.id))
+    .innerJoin(member, eq(member.organizationId, organization.id))
     .where(
       and(
-        eq(orgs.slug, target.data.orgSlug),
+        eq(organization.slug, target.data.orgSlug),
         eq(projects.slug, target.data.projectSlug),
+        eq(member.userId, s.user.id),
       ),
     )
     .limit(1);
-  return row;
+  return row && MANAGE_ROLES.has(row.role) ? row : undefined;
 }
 
 export type CreateKeyState = { key?: string; error?: string };
@@ -45,8 +51,9 @@ export async function createApiKey(
     return {
       error: "Give the key a name of up to 80 characters, e.g. github-actions.",
     };
-  const project = await findProject(orgSlug, projectSlug);
-  if (!project) return { error: "Project not found." };
+  const project = await findManagedProject(orgSlug, projectSlug);
+  if (!project)
+    return { error: "Project not found, or you cannot manage its keys." };
   const { key, prefix, hash } = generateApiKey();
   const db = await getDb();
   await db
@@ -63,8 +70,12 @@ export async function revokeApiKey(
 ): Promise<{ ok: boolean; error?: string }> {
   if (!z.uuid().safeParse(keyId).success)
     return { ok: false, error: "Unknown key." };
-  const project = await findProject(orgSlug, projectSlug);
-  if (!project) return { ok: false, error: "Project not found." };
+  const project = await findManagedProject(orgSlug, projectSlug);
+  if (!project)
+    return {
+      ok: false,
+      error: "Project not found, or you cannot manage its keys.",
+    };
   const db = await getDb();
   const revoked = await db
     .update(apiKeys)

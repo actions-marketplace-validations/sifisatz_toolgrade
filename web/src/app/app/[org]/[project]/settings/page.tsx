@@ -13,6 +13,7 @@ import {
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
 import { getProject, listApiKeys } from "@/lib/data";
+import { MANAGE_ROLES, requireUser } from "@/lib/session";
 
 export const metadata = { title: "Settings & CI" };
 
@@ -32,10 +33,13 @@ async function Settings({
   params: Promise<{ org: string; project: string }>;
 }) {
   const { org: orgSlug, project: projectSlug } = await params;
-  const found = await getProject(orgSlug, projectSlug);
+  const user = await requireUser();
+  const found = await getProject(user.id, orgSlug, projectSlug);
   if (!found) notFound();
   const { project, org } = found;
-  const keys = await listApiKeys(project.id);
+  const keys = MANAGE_ROLES.has(found.role)
+    ? await listApiKeys(project.id)
+    : [];
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host") ?? "localhost:3000"}`;
 
@@ -80,11 +84,18 @@ npx toolgrade run evals/suite.yaml --upload ${origin}`;
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <ApiKeysPanel
-              orgSlug={org.slug}
-              projectSlug={project.slug}
-              keys={keys}
-            />
+            {MANAGE_ROLES.has(found.role) ? (
+              <ApiKeysPanel
+                orgSlug={org.slug}
+                projectSlug={project.slug}
+                keys={keys}
+              />
+            ) : (
+              <p className="text-sm text-muted-foreground">
+                You are a {found.role} of {org.name}. Ask an owner or admin to
+                create an API key.
+              </p>
+            )}
           </CardContent>
         </Card>
         <Card>

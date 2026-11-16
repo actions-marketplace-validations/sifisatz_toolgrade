@@ -2,14 +2,20 @@
 // real example MCP server; only the model is simulated (a scripted agent with a per-commit
 // failure rate), so the numbers, intervals and gates are genuine engine output.
 import { randomBytes } from "node:crypto";
-import { mkdirSync, writeFileSync } from "node:fs";
+import { existsSync, mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { join } from "node:path";
 import { eq } from "drizzle-orm";
 import { loadSuite, runSuite, type Script, ScriptedProvider } from "toolgrade";
 import { notesAgent } from "../../examples/scripted-agent";
 import { getDb } from "../src/db/client";
-import { apiKeys, orgs, projects, runs } from "../src/db/schema";
+import { apiKeys, organization, projects, runs, user } from "../src/db/schema";
 import { generateApiKey } from "../src/lib/api-keys";
+import { getAuth } from "../src/lib/auth";
+import {
+  DEMO_CREDENTIALS_FILE,
+  DEMO_EMAIL,
+  DEMO_ORG_SLUG,
+} from "../src/lib/demo";
 import { toRunRow, UploadSchema } from "../src/lib/ingest";
 
 const SUITE = join(
@@ -84,25 +90,52 @@ function simulatedAgent(failRate: number, random: () => number): Script {
   };
 }
 
+/** Local dev needs an auth secret; create .env.local once (git-ignored) and load it here. */
+function ensureLocalEnv() {
+  const file = join(process.cwd(), ".env.local");
+  const env = existsSync(file) ? readFileSync(file, "utf8") : "";
+  const lines = env.split("\n").filter(Boolean);
+  if (!/^BETTER_AUTH_SECRET=/m.test(env))
+    lines.push(`BETTER_AUTH_SECRET=${randomBytes(32).toString("base64url")}`);
+  if (!/^BETTER_AUTH_URL=/m.test(env))
+    lines.push("BETTER_AUTH_URL=http://localhost:3100");
+  writeFileSync(file, `${lines.join("\n")}\n`, { mode: 0o600 });
+  for (const line of lines) {
+    const [k, ...v] = line.split("=");
+    if (k && !process.env[k]) process.env[k] = v.join("=");
+  }
+}
+
 async function main() {
+  ensureLocalEnv();
   const db = await getDb();
-  await db.delete(orgs).where(eq(orgs.slug, "acme"));
-  const [org] = await db
-    .insert(orgs)
-    .values({ slug: "acme", name: "Acme AI" })
-    .returning();
+  const auth = await getAuth();
+
+  // Reset only the demo user and the demo org (everything else cascades from them).
+  await db.delete(user).where(eq(user.email, DEMO_EMAIL));
+  await db.delete(organization).where(eq(organization.slug, DEMO_ORG_SLUG));
+
+  const password =
+    process.env.DEMO_PASSWORD ?? randomBytes(18).toString("base64url");
+  const signUp = await auth.api.signUpEmail({
+    body: { name: "Demo user", email: DEMO_EMAIL, password },
+  });
+  const org = await auth.api.createOrganization({
+    body: { name: "Acme AI", slug: DEMO_ORG_SLUG, userId: signUp.user.id },
+  });
+  if (!org) throw new Error("could not create the demo organization");
   const [notes, local] = await db
     .insert(projects)
     .values([
       {
-        orgId: org!.id,
+        orgId: org.id,
         slug: "notes-mcp",
         name: "Notes MCP server",
         description: "Team notes over MCP: search, read, create, delete.",
         repo: "acme/notes-mcp",
       },
       {
-        orgId: org!.id,
+        orgId: org.id,
         slug: "notes-mcp-local",
         name: "Notes MCP - local model",
         description:
@@ -159,11 +192,17 @@ async function main() {
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     join(dir, "demo-api-keys.txt"),
-    keys.map((k) => `${k.project.slug}=${k.key}`).join("\n") + "\n",
+    `${keys.map((k) => `${k.project.slug}=${k.key}`).join("\n")}\n`,
+    { mode: 0o600 },
+  );
+  writeFileSync(
+    join(process.cwd(), DEMO_CREDENTIALS_FILE),
+    JSON.stringify({ email: DEMO_EMAIL, password }),
     { mode: 0o600 },
   );
   console.log(
-    `\nSeeded org "acme" with ${HISTORY.length} demo runs. API keys written to .data/demo-api-keys.txt (shown once, stored hashed).`,
+    `\nSeeded org "${DEMO_ORG_SLUG}" with ${HISTORY.length} demo runs, owned by ${DEMO_EMAIL}.` +
+      `\nDemo credentials: ${DEMO_CREDENTIALS_FILE}; API keys: .data/demo-api-keys.txt (both mode 600, git-ignored).`,
   );
 }
 

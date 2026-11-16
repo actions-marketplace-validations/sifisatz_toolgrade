@@ -13,11 +13,12 @@ import {
 import { connection } from "next/server";
 import { cache } from "react";
 import { getDb } from "@/db/client";
-import { apiKeys, orgs, projects, runs } from "@/db/schema";
+import { apiKeys, member, organization, projects, runs } from "@/db/schema";
 
-// Every read is request-time (connection()) and org-scoped: a project is only ever looked up
-// through the org that owns it. cache() de-duplicates identical lookups within one request
-// (the layout and the page both ask for the org and its projects).
+// Every read is request-time (connection()) and membership-scoped: orgs and projects are only
+// ever looked up through the signed-in user's member row. Project-level reads below
+// (listProjects, listRuns, getRun, ...) take ids that came out of those checked lookups.
+// cache() de-duplicates identical lookups within one request (layout and page both ask).
 
 const TREND_POINTS = 20;
 
@@ -47,30 +48,59 @@ const runSummaryColumns = {
 
 export type RunSummary = Awaited<ReturnType<typeof listRuns>>[number];
 
-export const getOrg = cache(async (slug: string) => {
+/**
+ * The org, only if `userId` is a member - with their role. Non-members get undefined, the same
+ * as a missing org, so pages 404 without revealing that the org exists.
+ */
+export const getOrg = cache(async (userId: string, slug: string) => {
   await connection();
   const db = await getDb();
-  const [org] = await db
-    .select()
-    .from(orgs)
-    .where(eq(orgs.slug, slug))
+  const [row] = await db
+    .select({ org: organization, role: member.role })
+    .from(organization)
+    .innerJoin(member, eq(member.organizationId, organization.id))
+    .where(and(eq(organization.slug, slug), eq(member.userId, userId)))
     .limit(1);
-  return org;
+  return row ? { ...row.org, role: row.role } : undefined;
 });
 
 export const getProject = cache(
-  async (orgSlug: string, projectSlug: string) => {
+  async (userId: string, orgSlug: string, projectSlug: string) => {
     await connection();
     const db = await getDb();
     const [row] = await db
-      .select({ project: projects, org: orgs })
+      .select({ project: projects, org: organization, role: member.role })
       .from(projects)
-      .innerJoin(orgs, eq(projects.orgId, orgs.id))
-      .where(and(eq(orgs.slug, orgSlug), eq(projects.slug, projectSlug)))
+      .innerJoin(organization, eq(projects.orgId, organization.id))
+      .innerJoin(member, eq(member.organizationId, organization.id))
+      .where(
+        and(
+          eq(organization.slug, orgSlug),
+          eq(projects.slug, projectSlug),
+          eq(member.userId, userId),
+        ),
+      )
       .limit(1);
     return row;
   },
 );
+
+/** Every org the user belongs to, oldest membership first. */
+export const listUserOrgs = cache(async (userId: string) => {
+  await connection();
+  const db = await getDb();
+  return db
+    .select({
+      id: organization.id,
+      slug: organization.slug,
+      name: organization.name,
+      role: member.role,
+    })
+    .from(member)
+    .innerJoin(organization, eq(member.organizationId, organization.id))
+    .where(eq(member.userId, userId))
+    .orderBy(member.createdAt);
+});
 
 /** Projects with their run count and only the last TREND_POINTS runs each. */
 export const listProjects = cache(async (orgId: string) => {

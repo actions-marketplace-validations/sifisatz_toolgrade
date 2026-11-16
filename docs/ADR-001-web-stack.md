@@ -47,11 +47,12 @@ Run reports are kilobytes, a few per CI build - Postgres is ample for years.
   (shadcn's chart layer uses it). Tremor rejected: unmaintained since 2025.
 - Chart colors and marks follow a validated, colorblind-checked palette (with-tools = blue,
   baseline = orange; status colors reserved for gate state, always with icon + label).
-- **Auth:** PoC ships a clearly labelled demo workspace with no login. Project API keys for
-  ingestion are real: random, shown once, stored as SHA-256 hashes. Production auth: Better Auth
-  (TS-native, org plugin, actively maintained; Auth.js is in maintenance mode). WorkOS when
-  enterprise SSO is needed.
-- Multi-tenancy from day one: every project belongs to an org, every query is org-scoped.
+- **Auth:** Better Auth (TS-native, actively maintained; Auth.js is in maintenance mode) with
+  email + password and its organization plugin, on the same Drizzle schema with uuid ids. Its
+  `organization` and `member` tables are the tenant boundary. Project API keys for CLI ingestion
+  are separate: random, shown once, stored as SHA-256 hashes. WorkOS when enterprise SSO is needed.
+- Multi-tenancy from day one: every project belongs to an org, and every read and action goes
+  through the signed-in user's membership; a non-member sees the same 404 as a missing org.
 
 ## Consequences
 

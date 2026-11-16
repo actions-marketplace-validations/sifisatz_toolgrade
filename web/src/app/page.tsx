@@ -57,8 +57,11 @@ export default function Landing() {
           </nav>
           <div className="ml-auto flex items-center gap-2">
             <ThemeToggle />
-            <Button size="sm" render={<Link href="/app" />}>
-              Open live demo <ArrowRight />
+            <Button size="sm" variant="ghost" render={<Link href="/sign-in" />}>
+              Sign in
+            </Button>
+            <Button size="sm" render={<Link href="/sign-up" />}>
+              Start free <ArrowRight />
             </Button>
           </div>
         </div>
@@ -80,12 +83,19 @@ export default function Landing() {
               confidence intervals - on every pull request.
             </p>
             <div className="mt-8 flex flex-wrap gap-3">
-              <Button size="lg" render={<Link href="/app" />}>
-                Explore the demo workspace <ArrowRight />
+              <Button size="lg" render={<Link href="/sign-up" />}>
+                Start free <ArrowRight />
               </Button>
               <Button
                 size="lg"
                 variant="outline"
+                render={<Link href="/sign-in" />}
+              >
+                Explore the demo workspace
+              </Button>
+              <Button
+                size="lg"
+                variant="ghost"
                 render={<Link href="#get-started" />}
               >
                 <Terminal /> Run it locally

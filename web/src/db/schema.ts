@@ -15,13 +15,117 @@ import type { RunReport } from "toolgrade/core";
 
 const createdAt = () =>
   timestamp({ withTimezone: true }).notNull().defaultNow();
+const updatedAt = () =>
+  timestamp({ withTimezone: true })
+    .notNull()
+    .defaultNow()
+    .$onUpdate(() => new Date());
+const id = () => uuid().primaryKey().defaultRandom();
 
-export const orgs = pgTable("orgs", {
-  id: uuid().primaryKey().defaultRandom(),
-  slug: text().notNull().unique(),
+// --- Better Auth (core + organization plugin). Keys are the camelCase field names Better Auth
+// uses; the snake_case casing maps them to columns. Ids are uuid (advanced.database.generateId).
+
+export const user = pgTable("user", {
+  id: id(),
   name: text().notNull(),
+  email: text().notNull().unique(),
+  emailVerified: boolean().notNull().default(false),
+  image: text(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+export const session = pgTable(
+  "session",
+  {
+    id: id(),
+    expiresAt: timestamp({ withTimezone: true }).notNull(),
+    token: text().notNull().unique(),
+    ipAddress: text(),
+    userAgent: text(),
+    userId: uuid()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    activeOrganizationId: uuid(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.userId)],
+);
+
+export const account = pgTable(
+  "account",
+  {
+    id: id(),
+    accountId: text().notNull(),
+    providerId: text().notNull(),
+    userId: uuid()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    accessToken: text(),
+    refreshToken: text(),
+    idToken: text(),
+    accessTokenExpiresAt: timestamp({ withTimezone: true }),
+    refreshTokenExpiresAt: timestamp({ withTimezone: true }),
+    scope: text(),
+    password: text(),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.userId)],
+);
+
+export const verification = pgTable("verification", {
+  id: id(),
+  identifier: text().notNull(),
+  value: text().notNull(),
+  expiresAt: timestamp({ withTimezone: true }).notNull(),
+  createdAt: createdAt(),
+  updatedAt: updatedAt(),
+});
+
+/** The tenant. Every project, key and run hangs off an organization. */
+export const organization = pgTable("organization", {
+  id: id(),
+  name: text().notNull(),
+  slug: text().notNull().unique(),
+  logo: text(),
+  metadata: text(),
   createdAt: createdAt(),
 });
+
+export const member = pgTable(
+  "member",
+  {
+    id: id(),
+    organizationId: uuid()
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    userId: uuid()
+      .notNull()
+      .references(() => user.id, { onDelete: "cascade" }),
+    role: text().notNull().default("member"),
+    createdAt: createdAt(),
+  },
+  (t) => [uniqueIndex().on(t.organizationId, t.userId), index().on(t.userId)],
+);
+
+export const invitation = pgTable("invitation", {
+  id: id(),
+  organizationId: uuid()
+    .notNull()
+    .references(() => organization.id, { onDelete: "cascade" }),
+  email: text().notNull(),
+  role: text(),
+  status: text().notNull().default("pending"),
+  expiresAt: timestamp({ withTimezone: true }).notNull(),
+  inviterId: uuid()
+    .notNull()
+    .references(() => user.id, { onDelete: "cascade" }),
+  createdAt: createdAt(),
+});
+
+// --- ToolGrade
 
 export const projects = pgTable(
   "projects",
@@ -29,7 +133,7 @@ export const projects = pgTable(
     id: uuid().primaryKey().defaultRandom(),
     orgId: uuid()
       .notNull()
-      .references(() => orgs.id, { onDelete: "cascade" }),
+      .references(() => organization.id, { onDelete: "cascade" }),
     slug: text().notNull(),
     name: text().notNull(),
     description: text(),
@@ -88,7 +192,7 @@ export const runs = pgTable(
   (t) => [index().on(t.projectId, t.createdAt)],
 );
 
-export type Org = typeof orgs.$inferSelect;
+export type Org = typeof organization.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type Run = typeof runs.$inferSelect;

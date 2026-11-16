@@ -37,6 +37,7 @@ import {
 } from "@/components/ui/table";
 import { getPreviousRunId, getProject, getRun } from "@/lib/data";
 import { dateTime, pct, shortSha, signedPct, usd } from "@/lib/format";
+import { requireUser } from "@/lib/session";
 import { forClient } from "@/lib/trim";
 
 export const metadata = { title: "Run" };
@@ -57,7 +58,8 @@ async function RunDetail({
   params: Promise<{ org: string; project: string; run: string }>;
 }) {
   const { org: orgSlug, project: projectSlug, run: runId } = await params;
-  const found = await getProject(orgSlug, projectSlug);
+  const user = await requireUser();
+  const found = await getProject(user.id, orgSlug, projectSlug);
   if (!found) notFound();
   const { project, org } = found;
   const run = await getRun(project.id, runId);

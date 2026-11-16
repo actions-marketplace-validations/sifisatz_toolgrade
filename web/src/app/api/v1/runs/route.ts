@@ -1,6 +1,6 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
-import { apiKeys, orgs, projects, runs } from "@/db/schema";
+import { apiKeys, organization, projects, runs } from "@/db/schema";
 import { bearerToken, hashApiKey } from "@/lib/api-keys";
 import { hasNul, MAX_UPLOAD_BYTES, toRunRow, UploadSchema } from "@/lib/ingest";
 
@@ -46,11 +46,11 @@ export async function POST(request: Request) {
       id: apiKeys.id,
       projectId: apiKeys.projectId,
       projectSlug: projects.slug,
-      orgSlug: orgs.slug,
+      orgSlug: organization.slug,
     })
     .from(apiKeys)
     .innerJoin(projects, eq(apiKeys.projectId, projects.id))
-    .innerJoin(orgs, eq(projects.orgId, orgs.id))
+    .innerJoin(organization, eq(projects.orgId, organization.id))
     .where(and(eq(apiKeys.hash, hashApiKey(token)), isNull(apiKeys.revokedAt)))
     .limit(1);
   if (!key) return json({ error: "invalid or revoked API key" }, 401);

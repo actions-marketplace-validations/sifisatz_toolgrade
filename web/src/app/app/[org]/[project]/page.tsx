@@ -19,6 +19,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { getProject, listRuns } from "@/lib/data";
 import { pct, shortDate, shortSha, signedPct, usd } from "@/lib/format";
+import { requireUser } from "@/lib/session";
 
 export const metadata = { title: "Project" };
 
@@ -38,7 +39,8 @@ async function Project({
   params: Promise<{ org: string; project: string }>;
 }) {
   const { org: orgSlug, project: projectSlug } = await params;
-  const found = await getProject(orgSlug, projectSlug);
+  const user = await requireUser();
+  const found = await getProject(user.id, orgSlug, projectSlug);
   if (!found) notFound();
   const { project, org } = found;
   const base = `/app/${org.slug}/${project.slug}`;

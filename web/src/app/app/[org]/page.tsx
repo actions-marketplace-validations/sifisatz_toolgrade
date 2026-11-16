@@ -16,6 +16,7 @@ import {
 import { Skeleton } from "@/components/ui/skeleton";
 import { getOrg, listProjects } from "@/lib/data";
 import { pct, timeAgo, usd } from "@/lib/format";
+import { requireUser } from "@/lib/session";
 
 export const metadata = { title: "Overview" };
 
@@ -29,7 +30,8 @@ export default function OrgOverview({ params }: PageProps<"/app/[org]">) {
 
 async function Overview({ params }: { params: Promise<{ org: string }> }) {
   const { org: slug } = await params;
-  const org = await getOrg(slug);
+  const user = await requireUser();
+  const org = await getOrg(user.id, slug);
   if (!org) notFound();
   const list = await listProjects(org.id);
   const withRuns = list.filter((p) => p.latest);

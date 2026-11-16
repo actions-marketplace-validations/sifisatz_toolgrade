@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/table";
 import { getProject, getRun, listRuns, type RunSummary } from "@/lib/data";
 import { pct, shortDate, shortSha, signedPct } from "@/lib/format";
+import { requireUser } from "@/lib/session";
 import { cn } from "@/lib/utils";
 
 export const metadata = { title: "Compare runs" };
@@ -57,7 +58,8 @@ async function Compare({
     params,
     searchParams,
   ]);
-  const found = await getProject(orgSlug, projectSlug);
+  const user = await requireUser();
+  const found = await getProject(user.id, orgSlug, projectSlug);
   if (!found) notFound();
   const { project, org } = found;
   const base = `/app/${org.slug}/${project.slug}`;

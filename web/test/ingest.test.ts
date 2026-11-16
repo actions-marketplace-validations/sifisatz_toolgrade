@@ -3,7 +3,7 @@ import { loadSuite, runSuite, ScriptedProvider } from "toolgrade";
 import { beforeAll, describe, expect, it } from "vitest";
 import { POST } from "@/app/api/v1/runs/route";
 import { getDb } from "@/db/client";
-import { apiKeys, orgs, projects, runs } from "@/db/schema";
+import { apiKeys, organization, projects, runs } from "@/db/schema";
 import { bearerToken, generateApiKey, hashApiKey } from "@/lib/api-keys";
 import { toRunRow, UploadSchema } from "@/lib/ingest";
 import { notesAgent } from "../../examples/scripted-agent";
@@ -76,7 +76,7 @@ describe("POST /api/v1/runs", () => {
   beforeAll(async () => {
     const db = await getDb();
     const [org] = await db
-      .insert(orgs)
+      .insert(organization)
       .values({ slug: "t", name: "Test" })
       .returning();
     const [project] = await db

@@ -16,7 +16,7 @@ export type Db = PgliteDatabase<typeof schema>;
 
 const migrationsFolder = join(process.cwd(), "drizzle");
 
-async function open(): Promise<Db> {
+function open(): { db: Db; ready: Promise<void> } {
   const url = process.env.DATABASE_URL;
   if (url) {
     const db = drizzlePostgres({
@@ -24,8 +24,10 @@ async function open(): Promise<Db> {
       schema,
       casing: "snake_case",
     });
-    await migratePostgres(db, { migrationsFolder });
-    return db as unknown as Db;
+    return {
+      db: db as unknown as Db,
+      ready: migratePostgres(db, { migrationsFolder }),
+    };
   }
   // Zero-infra local mode: embedded Postgres (WASM), single connection, demo/dev only.
   const dataDir =
@@ -36,19 +38,30 @@ async function open(): Promise<Db> {
     schema,
     casing: "snake_case",
   });
-  await migratePglite(db, { migrationsFolder });
-  return db;
+  return { db, ready: migratePglite(db, { migrationsFolder }) };
 }
 
 // One connection per process, surviving dev hot reloads.
-const g = globalThis as unknown as { __toolgradeDb?: Promise<Db> };
+const g = globalThis as unknown as {
+  __toolgradeDb?: { db: Db; ready: Promise<void> };
+};
 
-export function getDb(): Promise<Db> {
-  g.__toolgradeDb ??= open().catch((err) => {
+/** Synchronous handle for libraries that need one at construction (Better Auth). Await getDb() before relying on the schema. */
+export function dbHandle(): Db {
+  g.__toolgradeDb ??= open();
+  return g.__toolgradeDb.db;
+}
+
+export async function getDb(): Promise<Db> {
+  dbHandle();
+  const conn = g.__toolgradeDb!;
+  try {
+    await conn.ready;
+  } catch (err) {
     g.__toolgradeDb = undefined;
     throw err;
-  });
-  return g.__toolgradeDb;
+  }
+  return conn.db;
 }
 
 export { schema };

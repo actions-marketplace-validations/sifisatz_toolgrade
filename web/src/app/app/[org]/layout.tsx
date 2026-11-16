@@ -1,4 +1,4 @@
-import { BookOpen, FlaskConical, LayoutGrid } from "lucide-react";
+import { BookOpen, LayoutGrid } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -24,7 +24,9 @@ import {
   SidebarTrigger,
 } from "@/components/ui/sidebar";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getOrg, listProjects } from "@/lib/data";
+import { UserMenu } from "@/components/user-menu";
+import { getOrg, listProjects, listUserOrgs } from "@/lib/data";
+import { requireUser } from "@/lib/session";
 
 export default function OrgLayout({
   children,
@@ -58,6 +60,11 @@ export default function OrgLayout({
                 <span>How it works</span>
               </SidebarMenuButton>
             </SidebarMenuItem>
+            <SidebarMenuItem>
+              <Suspense fallback={<Skeleton className="h-12 w-full" />}>
+                <AccountMenu params={params} />
+              </Suspense>
+            </SidebarMenuItem>
           </SidebarMenu>
         </SidebarFooter>
         <SidebarRail />
@@ -66,10 +73,6 @@ export default function OrgLayout({
         <header className="sticky top-0 z-10 flex h-12 items-center gap-2 border-b bg-background/80 px-4 backdrop-blur">
           <SidebarTrigger className="-ml-1" />
           <div className="ml-auto flex items-center gap-2">
-            <span className="hidden items-center gap-1.5 rounded-full border px-2.5 py-0.5 text-xs text-muted-foreground sm:inline-flex">
-              <FlaskConical className="size-3.5" aria-hidden />
-              Demo workspace - no sign-in
-            </span>
             <ThemeToggle />
           </div>
         </header>
@@ -81,9 +84,23 @@ export default function OrgLayout({
   );
 }
 
+async function AccountMenu({ params }: { params: Promise<{ org: string }> }) {
+  const { org: slug } = await params;
+  const user = await requireUser();
+  const orgs = await listUserOrgs(user.id);
+  return (
+    <UserMenu
+      user={{ name: user.name, email: user.email }}
+      currentOrg={slug}
+      orgs={orgs.map((o) => ({ slug: o.slug, name: o.name, role: o.role }))}
+    />
+  );
+}
+
 async function OrgHeader({ params }: { params: Promise<{ org: string }> }) {
   const { org: slug } = await params;
-  const org = await getOrg(slug);
+  const user = await requireUser();
+  const org = await getOrg(user.id, slug);
   if (!org) notFound();
   return (
     <Link
@@ -101,7 +118,8 @@ async function OrgHeader({ params }: { params: Promise<{ org: string }> }) {
 
 async function ProjectNav({ params }: { params: Promise<{ org: string }> }) {
   const { org: slug } = await params;
-  const org = await getOrg(slug);
+  const user = await requireUser();
+  const org = await getOrg(user.id, slug);
   if (!org) return null;
   const list = await listProjects(org.id);
   const base = `/app/${org.slug}`;

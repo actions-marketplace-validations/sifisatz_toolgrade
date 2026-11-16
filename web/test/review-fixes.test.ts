@@ -7,7 +7,7 @@ import { POST } from "@/app/api/v1/runs/route";
 import { revokeApiKey } from "@/app/app/[org]/[project]/settings/actions";
 import { Lift } from "@/components/status";
 import { getDb } from "@/db/client";
-import { apiKeys, orgs, projects } from "@/db/schema";
+import { apiKeys, organization, projects } from "@/db/schema";
 import { generateApiKey } from "@/lib/api-keys";
 import { MAX_UPLOAD_BYTES, UploadSchema } from "@/lib/ingest";
 import { notesAgent } from "../../examples/scripted-agent";
@@ -30,7 +30,7 @@ beforeAll(async () => {
   });
   const db = await getDb();
   const [org] = await db
-    .insert(orgs)
+    .insert(organization)
     .values({ slug: "rf", name: "Review fixes" })
     .returning();
   const [project] = await db
@@ -154,7 +154,10 @@ describe("server actions validate their arguments", () => {
     });
     expect(
       await revokeApiKey("../x", "p", "00000000-0000-4000-8000-000000000000"),
-    ).toEqual({ ok: false, error: "Project not found." });
+    ).toEqual({
+      ok: false,
+      error: "Project not found, or you cannot manage its keys.",
+    });
   });
 });
 
