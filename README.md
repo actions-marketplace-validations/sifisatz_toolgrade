@@ -1,5 +1,7 @@
 # ToolGrade
 
+[Website](https://sifisatz.github.io/toolgrade/) - [Platform (web/)](web/README.md) - [Methodology](#statistics-notes)
+
 **Eval-first quality gates for MCP servers.** ToolGrade answers one question with evidence:
 *does your tool surface make an agent better at real tasks than the same agent with no tools?*
 

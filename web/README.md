@@ -86,6 +86,20 @@ node dist/cli.js upload .toolgrade/runs/latest.json --url http://localhost:3100 
 Email verification and password reset (need an email provider), social sign-in, invitations UI,
 billing, model-drift alerts, hosted runners.
 
+## Marketing site on GitHub Pages
+
+`.github/workflows/pages.yml` publishes the landing page to https://sifisatz.github.io/toolgrade/
+on every push to `main`. It is a static export of this same app built with `MARKETING_EXPORT=1`:
+only `*.marketing.tsx` routes are compiled (the root layout and landing page), so the dashboard,
+API, proxy and auth - which need a server - are not part of it. Calls to action link to the
+GitHub quick start, or into a hosted app once the `APP_URL` repository variable is set.
+
+Build it locally:
+
+```bash
+MARKETING_EXPORT=1 NEXT_PUBLIC_STATIC_SITE=1 PAGES_BASE_PATH=/toolgrade pnpm exec next build   # -> out/
+```
+
 ## Checks
 
 ```bash

@@ -12,6 +12,7 @@ import {
   SheetTitle,
   SheetTrigger,
 } from "@/components/ui/sheet";
+import { CTA } from "@/lib/site";
 import { cn } from "@/lib/utils";
 
 const LINKS = [
@@ -63,16 +64,16 @@ export function MarketingNav() {
             size="sm"
             variant="ghost"
             className="hidden sm:inline-flex"
-            render={<Link href="/sign-in" />}
+            render={<Link href={CTA.signIn.href} />}
           >
-            Sign in
+            {CTA.signIn.label}
           </Button>
           <Button
             size="sm"
             className="shine hidden sm:inline-flex"
-            render={<Link href="/sign-up" />}
+            render={<Link href={CTA.primary.href} />}
           >
-            Start free <ArrowRight />
+            {CTA.primary.label} <ArrowRight />
           </Button>
           <Sheet open={open} onOpenChange={setOpen}>
             <SheetTrigger
@@ -102,10 +103,15 @@ export function MarketingNav() {
                 ))}
               </nav>
               <div className="mt-6 grid gap-2">
-                <Button variant="outline" render={<Link href="/sign-in" />}>
-                  Sign in
+                <Button
+                  variant="outline"
+                  render={<Link href={CTA.signIn.href} />}
+                >
+                  {CTA.signIn.label}
                 </Button>
-                <Button render={<Link href="/sign-up" />}>Start free</Button>
+                <Button render={<Link href={CTA.primary.href} />}>
+                  {CTA.primary.label}
+                </Button>
               </div>
             </SheetContent>
           </Sheet>

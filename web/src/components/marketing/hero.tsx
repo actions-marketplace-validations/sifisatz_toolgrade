@@ -1,6 +1,7 @@
 import { ArrowRight, Sparkles, Terminal } from "lucide-react";
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
+import { CTA } from "@/lib/site";
 import { HeroReplay } from "./hero-replay";
 
 /** Headline and CTAs are server-rendered at full opacity (fast LCP); only the product card moves. */
@@ -43,17 +44,17 @@ export function Hero() {
             <Button
               size="lg"
               className="shine h-11 px-5"
-              render={<Link href="/sign-up" />}
+              render={<Link href={CTA.primary.href} />}
             >
-              Start free <ArrowRight />
+              {CTA.primary.label} <ArrowRight />
             </Button>
             <Button
               size="lg"
               variant="outline"
               className="h-11 px-5"
-              render={<Link href="/sign-in" />}
+              render={<Link href={CTA.demo.href} />}
             >
-              Explore the demo
+              {CTA.demo.label}
             </Button>
             <Button
               size="lg"

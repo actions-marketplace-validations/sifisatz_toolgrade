@@ -9,6 +9,7 @@ import {
   AccordionTrigger,
 } from "@/components/ui/accordion";
 import { Button } from "@/components/ui/button";
+import { CTA } from "@/lib/site";
 import { InView } from "./primitives";
 import { SectionHeading } from "./section-heading";
 import { TerminalDemo } from "./terminal-demo";
@@ -260,7 +261,7 @@ const PLANS = [
       "Unlimited members",
     ],
     featured: true,
-    cta: { label: "Start free", href: "/sign-up" },
+    cta: CTA.primary,
   },
   {
     name: "Enterprise",
@@ -268,7 +269,7 @@ const PLANS = [
     per: "",
     text: "For platforms with many tool surfaces.",
     items: ["SSO and audit log", "VPC runners", "Shared task libraries"],
-    cta: { label: "Talk to us", href: "/sign-up" },
+    cta: CTA.enterprise,
   },
 ];
 
@@ -392,17 +393,17 @@ export function FinalCta() {
           <Button
             size="lg"
             className="shine h-11 px-6"
-            render={<Link href="/sign-up" />}
+            render={<Link href={CTA.primary.href} />}
           >
-            Start free <ArrowRight />
+            {CTA.primary.label} <ArrowRight />
           </Button>
           <Button
             size="lg"
             variant="outline"
             className="h-11 px-6"
-            render={<Link href="/sign-in" />}
+            render={<Link href={CTA.demo.href} />}
           >
-            Explore the demo
+            {CTA.demo.label}
           </Button>
         </div>
       </div>
@@ -431,9 +432,9 @@ export function Footer() {
     {
       title: "Account",
       links: [
-        ["Sign in", "/sign-in"],
-        ["Create account", "/sign-up"],
-        ["Demo workspace", "/sign-in"],
+        [CTA.signIn.label, CTA.signIn.href],
+        [CTA.primary.label, CTA.primary.href],
+        [CTA.demo.label, CTA.demo.href],
       ],
     },
   ];

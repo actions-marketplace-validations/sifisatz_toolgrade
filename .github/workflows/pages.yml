@@ -1,0 +1,54 @@
+# Publishes the marketing site (static export of web/, landing page only) to GitHub Pages.
+# The dashboard, API and auth need a server and are not part of this build.
+name: pages
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v6
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Build the engine package the site imports
+        run: pnpm build
+      - id: pages
+        uses: actions/configure-pages@v6
+      - name: Static export of the marketing site
+        run: pnpm --dir web exec next build
+        env:
+          MARKETING_EXPORT: "1"
+          NEXT_PUBLIC_STATIC_SITE: "1"
+          PAGES_BASE_PATH: ${{ steps.pages.outputs.base_path }}
+          # Set this repository variable once a hosted app exists; CTAs then link into it.
+          NEXT_PUBLIC_APP_URL: ${{ vars.APP_URL }}
+          NEXT_TELEMETRY_DISABLED: "1"
+      - uses: actions/upload-pages-artifact@v5
+        with:
+          path: web/out
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v5
