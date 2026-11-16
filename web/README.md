@@ -95,7 +95,7 @@ SEED_OUT_DIR=.data/prod pnpm seed
 
 | Variable | Purpose |
 |---|---|
-| `DATABASE_URL` | Hosted Postgres; migrations apply on first connection |
+| `DATABASE_URL` | Hosted Postgres (pooled); `DATABASE_URL_UNPOOLED` is used for migrations, which run in the build |
 | `BETTER_AUTH_SECRET` | 32+ random bytes; rotate with `BETTER_AUTH_SECRETS` |
 | `BETTER_AUTH_URL` | Public origin, e.g. `https://app.toolgrade.dev` |
 | `DEMO_PASSWORD` | Optional: enables "Explore the demo workspace"; omit to disable it |
