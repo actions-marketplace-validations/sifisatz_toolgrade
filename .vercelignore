@@ -1,0 +1,13 @@
+# Never upload local data, secrets or build output to Vercel.
+.env*
+**/.env*
+.scratch
+.toolgrade
+.data
+web/.data
+node_modules
+**/node_modules
+dist
+web/.next
+web/out
+.DS_Store

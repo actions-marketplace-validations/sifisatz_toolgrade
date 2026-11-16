@@ -195,21 +195,23 @@ async function main() {
       hash: k.hash,
     })),
   );
-  const dir = join(process.cwd(), ".data");
+  // SEED_OUT_DIR keeps a hosted seed's keys apart from the local demo's (.data by default).
+  const dir = join(process.cwd(), process.env.SEED_OUT_DIR ?? ".data");
+  const credsFile = process.env.SEED_OUT_DIR
+    ? join(dir, "demo-credentials.json")
+    : join(process.cwd(), DEMO_CREDENTIALS_FILE);
   mkdirSync(dir, { recursive: true });
   writeFileSync(
     join(dir, "demo-api-keys.txt"),
     `${keys.map((k) => `${k.project.slug}=${k.key}`).join("\n")}\n`,
     { mode: 0o600 },
   );
-  writeFileSync(
-    join(process.cwd(), DEMO_CREDENTIALS_FILE),
-    JSON.stringify({ email: DEMO_EMAIL, password }),
-    { mode: 0o600 },
-  );
+  writeFileSync(credsFile, JSON.stringify({ email: DEMO_EMAIL, password }), {
+    mode: 0o600,
+  });
   console.log(
     `\nSeeded org "${DEMO_ORG_SLUG}" with ${HISTORY.length} demo runs, owned by ${DEMO_EMAIL}.` +
-      `\nDemo credentials: ${DEMO_CREDENTIALS_FILE}; API keys: .data/demo-api-keys.txt (both mode 600, git-ignored).`,
+      `\nDemo credentials and API keys written under ${dir} (mode 600, git-ignored).`,
   );
 }
 
