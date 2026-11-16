@@ -13,7 +13,9 @@ export default function AuthLayout({ children }: LayoutProps<"/">) {
           {children}
         </div>
       </div>
-      <aside className="hidden flex-col justify-between border-l bg-muted/40 p-12 lg:flex">
+      <aside className="relative hidden flex-col justify-between overflow-hidden border-l bg-muted/40 p-12 lg:flex">
+        <div className="bg-grid pointer-events-none absolute inset-0 -z-10" aria-hidden />
+        <div className="hero-glow pointer-events-none absolute -top-32 -right-32 -z-10 h-[30rem] w-[40rem]" aria-hidden />
         <div className="max-w-md">
           <p className="text-2xl font-semibold tracking-tight text-balance">
             Stop guessing whether a tool change helped. Measure it on every pull
