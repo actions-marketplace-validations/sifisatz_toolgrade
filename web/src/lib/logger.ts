@@ -1,4 +1,8 @@
-import "server-only";
+// Deliberately no `import "server-only"` here: scripts/seed.ts (run via plain tsx, outside
+// Next's bundler, through lib/auth.ts) needs to load this module, and "server-only" throws
+// unconditionally outside that bundler - it isn't a Next-aware guard once you're not inside Next.
+// This module has no secrets of its own to protect (redact() exists specifically so it's safe to
+// call from anywhere), so the guard was precautionary rather than load-bearing.
 
 export type LogLevel = "debug" | "info" | "warn" | "error";
 
