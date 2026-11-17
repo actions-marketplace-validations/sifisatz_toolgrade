@@ -176,8 +176,50 @@ end-to-end tests run against the real example server with no API key.
 
 ## CI
 
-See [examples/github-workflow.yml](examples/github-workflow.yml) and [action.yml](action.yml)
-(the `toolgrade/toolgrade` action reference is a placeholder until the package is published).
+A full example is at [examples/github-workflow.yml](examples/github-workflow.yml); the action's
+inputs are defined in [action.yml](action.yml) (the `toolgrade/toolgrade` action reference is a
+placeholder until the package is published - until then, call the CLI directly with `npx
+toolgrade@latest run ...`).
+
+**Quick start**
+
+```yaml
+- uses: toolgrade/toolgrade@v0
+  env:
+    ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+  with:
+    suite: evals/suite.yaml
+```
+
+A failed `gate` (see [Suite file](#suite-file)) fails this step, and so the job and the PR check.
+
+**Model credentials.** The action never sees your key directly - set it as an `env:` on the step
+itself (as above), from a repository or organization secret. For `--provider anthropic` (the
+default) that is `ANTHROPIC_API_KEY`; for `--provider openai` (any OpenAI-compatible endpoint -
+OpenAI, Gemini, Groq, a self-hosted vLLM, or a local Ollama with no key at all) set `base-url` and
+`api-key-env` inputs, then export that same-named env var on the step. Self-hosted runners work
+the same way - nothing in the action depends on GitHub-hosted infrastructure.
+
+**Baseline comparison.** Download the previous run's report (e.g. from a build artifact uploaded
+on the default branch, as in the example workflow) and pass its path as the `compare` input - a
+statistically significant regression then fails the job. With no prior report (first run, or the
+artifact download found nothing), `compare` is skipped rather than treated as a regression.
+
+**Uploading to a hosted ToolGrade project.** Set `upload-url` to your platform origin (e.g.
+`https://app.toolgrade.dev`) and either set `TOOLGRADE_API_KEY` as an env var on the step or pass
+it as the `toolgrade-api-key` input, from a project API key (Settings -> API keys in the
+dashboard). This uploads the report for history and comparison in the dashboard; it is independent
+of (and additional to) the artifact-based `compare` above, which is what actually fails the build
+today.
+
+**Private or self-hosted MCP servers.** The action makes no assumptions about your server beyond
+what the suite's `server:` block says - a stdio command the runner can execute, or an HTTP(S) URL
+it can reach (add `headers:` in the suite for auth). On a self-hosted runner with network access
+to an internal server, no extra configuration is needed.
+
+**Troubleshooting.** `toolgrade inspect <suite>` (no model calls) is the fastest way to check that
+CI can reach your server and see the expected tools before spending any model budget on `run`.
+`--filter <idOrTag>` scopes a run to one task while debugging a suite in CI.
 
 ## Statistics notes
 

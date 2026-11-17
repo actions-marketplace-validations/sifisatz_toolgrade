@@ -8,8 +8,52 @@ inputs:
     description: Trials per task per arm (overrides the suite)
     required: false
     default: ""
+  concurrency:
+    description: Parallel trials (overrides the suite)
+    required: false
+    default: ""
+  filter:
+    description: Only run tasks with this id or tag
+    required: false
+    default: ""
+  no-baseline:
+    description: Skip the no-tool baseline arm
+    required: false
+    default: "false"
   compare:
     description: Previous run report JSON to compare against; a significant regression fails the job
+    required: false
+    default: ""
+  model:
+    description: Agent model (overrides the suite)
+    required: false
+    default: ""
+  judge-model:
+    description: Judge model (overrides the suite; defaults to --model when that is given)
+    required: false
+    default: ""
+  provider:
+    description: Model provider - anthropic, or openai for any OpenAI-compatible endpoint (Ollama, OpenAI, Gemini, Groq...)
+    required: false
+    default: ""
+  base-url:
+    description: Endpoint for provider openai
+    required: false
+    default: ""
+  api-key-env:
+    description: Env var holding the model API key for provider openai (set it on this step; Ollama needs none)
+    required: false
+    default: ""
+  local-model:
+    description: The model runs on your own hardware - price it at $0
+    required: false
+    default: "false"
+  upload-url:
+    description: ToolGrade platform origin to upload the report to, e.g. https://app.toolgrade.dev (key from toolgrade-api-key or TOOLGRADE_API_KEY)
+    required: false
+    default: ""
+  toolgrade-api-key:
+    description: ToolGrade project API key, for upload-url. Prefer passing this as a secret; TOOLGRADE_API_KEY set on this step also works.
     required: false
     default: ""
   version:
@@ -31,12 +75,36 @@ runs:
       env:
         TG_SUITE: ${{ inputs.suite }}
         TG_TRIALS: ${{ inputs.trials }}
+        TG_CONCURRENCY: ${{ inputs.concurrency }}
+        TG_FILTER: ${{ inputs.filter }}
+        TG_NO_BASELINE: ${{ inputs.no-baseline }}
         TG_COMPARE: ${{ inputs.compare }}
+        TG_MODEL: ${{ inputs.model }}
+        TG_JUDGE_MODEL: ${{ inputs.judge-model }}
+        TG_PROVIDER: ${{ inputs.provider }}
+        TG_BASE_URL: ${{ inputs.base-url }}
+        TG_API_KEY_ENV: ${{ inputs.api-key-env }}
+        TG_LOCAL_MODEL: ${{ inputs.local-model }}
+        TG_UPLOAD_URL: ${{ inputs.upload-url }}
         TG_VERSION: ${{ inputs.version }}
+        TG_API_KEY_INPUT: ${{ inputs.toolgrade-api-key }}
       run: |
+        # The caller's own TOOLGRADE_API_KEY (set as `env:` on the step that calls this action) is
+        # already inherited here; the input is just a more discoverable way to pass the same thing.
+        [ -n "$TG_API_KEY_INPUT" ] && export TOOLGRADE_API_KEY="$TG_API_KEY_INPUT"
         args=(run "$TG_SUITE" --markdown .toolgrade/summary.md)
         [ -n "$TG_TRIALS" ] && args+=(--trials "$TG_TRIALS")
+        [ -n "$TG_CONCURRENCY" ] && args+=(--concurrency "$TG_CONCURRENCY")
+        [ -n "$TG_FILTER" ] && args+=(--filter "$TG_FILTER")
+        [ "$TG_NO_BASELINE" = "true" ] && args+=(--no-baseline)
         [ -n "$TG_COMPARE" ] && args+=(--compare "$TG_COMPARE")
+        [ -n "$TG_MODEL" ] && args+=(--model "$TG_MODEL")
+        [ -n "$TG_JUDGE_MODEL" ] && args+=(--judge-model "$TG_JUDGE_MODEL")
+        [ -n "$TG_PROVIDER" ] && args+=(--provider "$TG_PROVIDER")
+        [ -n "$TG_BASE_URL" ] && args+=(--base-url "$TG_BASE_URL")
+        [ -n "$TG_API_KEY_ENV" ] && args+=(--api-key-env "$TG_API_KEY_ENV")
+        [ "$TG_LOCAL_MODEL" = "true" ] && args+=(--local-model)
+        [ -n "$TG_UPLOAD_URL" ] && args+=(--upload "$TG_UPLOAD_URL")
         mkdir -p .toolgrade
         set +e
         npx --yes "toolgrade@$TG_VERSION" "${args[@]}"
