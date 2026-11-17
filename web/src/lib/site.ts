@@ -20,6 +20,7 @@ export const CTA: {
   demo: Link;
   signIn: Link;
   enterprise: Link;
+  designPartners: Link;
 } = hasApp
   ? {
       primary: { label: "Start free", href: app("/sign-up") },
@@ -29,6 +30,12 @@ export const CTA: {
       // actually reaches someone, same as the static (no-app) build below. Not self-serve
       // signup: an "Enterprise" visitor asking a question should not land on a plan picker.
       enterprise: { label: "Talk to us", href: `${REPO_URL}/issues` },
+      // /design-partners needs a live database (the application form writes to it), so unlike
+      // every other route here it has no .marketing.tsx twin - it only exists in the hosted app.
+      designPartners: {
+        label: "Design partners",
+        href: app("/design-partners"),
+      },
     }
   : {
       primary: { label: "Get started", href: `${REPO_URL}#quick-start` },
@@ -38,4 +45,6 @@ export const CTA: {
       },
       signIn: { label: "GitHub", href: REPO_URL },
       enterprise: { label: "Open an issue", href: `${REPO_URL}/issues` },
+      // No hosted app to send a static-site visitor to - same GitHub issues fallback as enterprise.
+      designPartners: { label: "Design partners", href: `${REPO_URL}/issues` },
     };

@@ -139,6 +139,11 @@ SEED_OUT_DIR=.data/prod pnpm seed
   reasoning as the `rate_limit` table. A failed write is logged, never thrown: analytics must not
   break the request that triggered it. Run `pnpm growth:report [days]` against `DATABASE_URL` for a
   plain funnel summary (default: last 30 days).
+- **Design partner applications**: the public, unauthenticated `/design-partners` form (rate
+  limited per IP via the same `rate_limit` table, plus a honeypot field) writes to the
+  `design_partner_applications` table and fires a `design_partner_applied` product event. Triage
+  by hand with `pnpm partners:report`; update an applicant's `status` directly in the database as
+  they move through the pipeline.
 - **Not done, deliberately**: no separate error-tracking service (Sentry or similar) - structured
   logs to Vercel's own Logs tab are the extent of it for now. Revisit once there are real paying
   customers whose incidents justify a few more dollars a month; adding it before that would be

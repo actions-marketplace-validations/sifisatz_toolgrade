@@ -270,6 +270,26 @@ export const productEvents = pgTable(
   (t) => [index().on(t.name, t.createdAt)],
 );
 
+/**
+ * Submissions from the public, unauthenticated "/design-partners" marketing form - not tied to a
+ * user or org (most applicants have neither yet). Triaged by hand (see scripts/
+ * design-partners-report.ts); `status` is simple free-form progress tracking, not a workflow
+ * engine.
+ */
+export const designPartnerApplications = pgTable(
+  "design_partner_applications",
+  {
+    id: id(),
+    name: text().notNull(),
+    email: text().notNull(),
+    company: text(),
+    mcpServer: text().notNull(),
+    notes: text(),
+    status: text().notNull().default("new"),
+    createdAt: createdAt(),
+  },
+);
+
 export type Org = typeof organization.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;

@@ -11,7 +11,8 @@ export type ProductEventName =
   | "api_key_created"
   | "run_ingested"
   | "checkout_started"
-  | "subscription_started";
+  | "subscription_started"
+  | "design_partner_applied";
 
 export interface ProductEvent {
   name: ProductEventName;

@@ -13,6 +13,7 @@
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
     "growth:report": "tsx scripts/growth-report.ts",
+    "partners:report": "tsx scripts/design-partners-report.ts",
     "format": "biome format --write"
   },
   "dependencies": {

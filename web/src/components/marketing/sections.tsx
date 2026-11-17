@@ -463,6 +463,7 @@ export function Footer() {
         ["Methodology", "/#methodology"],
         ["FAQ", "/#faq"],
         ["Measured results", "/#measured"],
+        [CTA.designPartners.label, CTA.designPartners.href],
       ],
     },
     {
