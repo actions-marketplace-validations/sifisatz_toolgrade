@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Northwind Outdoor - Newsletter</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Northwind Outdoor</h1>
+    <nav><a href="index.html">Shop</a> | <a href="shipping.html">Shipping</a> | <a href="order.html">Order</a> | <a href="newsletter.html">Newsletter</a></nav>
+  </header>
+  <main>
+    <h2>Newsletter</h2>
+    <form id="signup" novalidate>
+      <label>Email <input name="email" id="email" type="text"></label>
+      <button type="submit">Subscribe</button>
+    </form>
+    <p id="message" role="status"></p>
+  </main>
+  <script>
+    document.getElementById("signup").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const email = document.getElementById("email").value.trim();
+      const msg = document.getElementById("message");
+      msg.textContent = /^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(email)
+        ? "Thanks! Check " + email + " to confirm your subscription."
+        : "That does not look like an email address (code E-EMAIL-01).";
+    });
+  </script>
+</body>
+</html>

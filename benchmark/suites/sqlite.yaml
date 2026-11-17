@@ -1,0 +1,64 @@
+# ToolGrade public benchmark - MCP Toolbox for Databases v1.17.0 (googleapis/mcp-toolbox), prebuilt
+# SQLite tools. Built from the pinned tag in benchmark/container/Containerfile. Each trial gets a
+# fresh copy of the shop database built from ../fixtures/sqlite/seed.sql.
+name: mcp-toolbox-sqlite@1.17.0
+
+server:
+  command: toolbox
+  args: ["--prebuilt", "sqlite", "--stdio"]
+  fixture: ../fixtures/sqlite
+  env:
+    SQLITE_DATABASE: "${TRIAL_DIR}/shop.db"
+
+agent:
+  max_turns: 10
+  max_tokens: 6000
+
+run:
+  trials: 3
+  baseline: true
+  concurrency: 2
+
+tasks:
+  - id: top-customer
+    tags: [read]
+    prompt: Using the shop database, which customer has ordered the most units in total, not counting cancelled orders?
+    assert:
+      - { type: output_contains, value: "Maria Papadopoulou" }
+
+  - id: pending-value
+    tags: [read]
+    prompt: Using the shop database, what is the total value in EUR of all pending orders?
+    assert:
+      - { type: output_regex, pattern: "\\b297([.,]00?)?\\b" }
+
+  - id: out-of-stock
+    tags: [read]
+    prompt: Using the shop database, which products are out of stock?
+    assert:
+      - { type: output_contains, value: "City Sneaker" }
+
+  - id: ship-order
+    tags: [write]
+    prompt: In the shop database, mark order 3 as shipped. Do not change any other order.
+    assert:
+      - type: state
+        tool: execute_sql
+        args: { sql: "SELECT 'status-of-3=' || status AS s FROM orders WHERE id = 3 UNION ALL SELECT 'shipped-total=' || COUNT(*) FROM orders WHERE status = 'shipped'" }
+        contains: ["status-of-3=shipped", "shipped-total=3"]
+
+  - id: add-customer
+    tags: [write]
+    prompt: Add a new customer to the shop database - Sofia Andersson from Sweden (country code SE).
+    assert:
+      - type: state
+        tool: execute_sql
+        args: { sql: "SELECT 'found=' || name || '/' || country AS s FROM customers WHERE name = 'Sofia Andersson'" }
+        contains: "found=Sofia Andersson/SE"
+
+  - id: no-tool-needed
+    tags: [control]
+    prompt: What is 17 * 23? Reply with just the number.
+    assert:
+      - { type: output_contains, value: "391" }
+      - { type: max_tool_calls, value: 0 }

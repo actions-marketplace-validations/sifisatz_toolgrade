@@ -1,0 +1,50 @@
+# ToolGrade public benchmark - mcp-server-time 2026.11.11 (PyPI, pinned in benchmark/container/Containerfile)
+# A tough-baseline case: models know many UTC offsets. Only zones without daylight saving are used,
+# so the right answers do not depend on the date the benchmark runs.
+name: mcp-server-time@2026.11.11
+
+server:
+  command: mcp-server-time
+  args: ["--local-timezone", "UTC"]
+
+agent:
+  max_turns: 8
+  max_tokens: 6000
+
+run:
+  trials: 3
+  baseline: true
+  concurrency: 2
+
+tasks:
+  - id: tokyo-to-kathmandu
+    prompt: It is 09:00 in Tokyo (Asia/Tokyo). What time is it in Kathmandu (Asia/Kathmandu)? Answer in 24-hour HH:MM.
+    assert:
+      - { type: output_regex, pattern: "\\b0?5:45\\b" }
+
+  - id: dubai-to-honolulu
+    prompt: A call is scheduled at 14:30 in Dubai (Asia/Dubai). What time is that in Honolulu (Pacific/Honolulu)? Answer in 24-hour HH:MM.
+    assert:
+      - { type: output_regex, pattern: "\\b00:30\\b|\\b0:30\\b|\\b12:30\\s*a\\.?m" }
+
+  - id: phoenix-to-shanghai
+    prompt: It is 08:15 in Phoenix (America/Phoenix). What time is it in Shanghai (Asia/Shanghai)? Answer in 24-hour HH:MM.
+    assert:
+      - { type: output_regex, pattern: "\\b23:15\\b|\\b11:15\\s*p\\.?m" }
+
+  - id: brisbane-to-kolkata
+    prompt: It is 23:00 in Brisbane (Australia/Brisbane). What time is it in Kolkata (Asia/Kolkata)? Answer in 24-hour HH:MM.
+    assert:
+      - { type: output_regex, pattern: "\\b18:30\\b|\\b6:30\\s*p\\.?m" }
+
+  - id: kathmandu-vs-kolkata
+    prompt: How far ahead of Kolkata (Asia/Kolkata) is Kathmandu (Asia/Kathmandu)? Give the difference in minutes.
+    assert:
+      - { type: output_regex, pattern: "\\b15\\s*min|\\b0?0:15\\b|quarter of an hour|fifteen minutes" }
+
+  - id: no-tool-needed
+    tags: [control]
+    prompt: What is 17 * 23? Reply with just the number.
+    assert:
+      - { type: output_contains, value: "391" }
+      - { type: max_tool_calls, value: 0 }

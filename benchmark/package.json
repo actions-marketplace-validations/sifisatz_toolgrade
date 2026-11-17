@@ -4,6 +4,8 @@
   "description": "Public benchmark of reference MCP servers, graded with ToolGrade. Server versions are pinned for reproducibility.",
   "type": "module",
   "dependencies": {
+    "@playwright/mcp": "0.0.85",
+    "playwright": "1.66.0-alpha-2026-11-09",
     "@modelcontextprotocol/server-filesystem": "2.3.0",
     "@modelcontextprotocol/server-memory": "2.1.1",
     "@modelcontextprotocol/server-sequential-thinking": "2.1.1"

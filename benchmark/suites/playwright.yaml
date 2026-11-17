@@ -1,0 +1,64 @@
+# ToolGrade public benchmark - @playwright/mcp 0.0.85 (pinned in ../package.json), headless Chromium.
+# Each trial gets a fresh browser and a fresh copy of the static shop in ../fixtures/web, opened
+# from file:// URLs, so nothing is served over the network.
+name: playwright-mcp@0.0.85
+
+server:
+  command: node
+  args: [node_modules/@playwright/mcp/cli.js, --headless, --isolated, --browser, chromium, --no-sandbox, --allow-unrestricted-file-access]
+  cwd: ..
+  fixture: ../fixtures/web
+  env:
+    # Servers start with a minimal environment; point Playwright at the runner image's browsers.
+    PLAYWRIGHT_BROWSERS_PATH: /ms-playwright
+
+agent:
+  max_turns: 12
+  max_tokens: 6000
+
+run:
+  trials: 3
+  baseline: true
+  concurrency: 2
+
+tasks:
+  - id: product-price
+    tags: [read]
+    prompt: Open file://${TRIAL_DIR}/index.html in the browser. How much does the Hiking Boot cost?
+    assert:
+      - { type: output_regex, pattern: "\\b149([.,]00)?\\b" }
+
+  - id: cheap-in-stock
+    tags: [read]
+    prompt: On file://${TRIAL_DIR}/index.html, how many products are in stock and cost less than 100 EUR?
+    assert:
+      - { type: output_regex, pattern: "\\b2\\b|\\btwo\\b" }
+
+  - id: shipping-cost
+    tags: [read]
+    prompt: Starting from file://${TRIAL_DIR}/index.html, find the standard shipping cost to Greece.
+    assert:
+      - { type: output_regex, pattern: "\\b7[.,]50\\b" }
+
+  - id: place-order
+    tags: [write]
+    prompt: Go to file://${TRIAL_DIR}/order.html and order 2 Trail Runner in size 42 for Nikos Pappas. What order reference does the page show?
+    assert:
+      - { type: output_contains, value: "NW-1116" }
+      - type: state
+        tool: browser_snapshot
+        args: {}
+        contains: "Order confirmed: 2 x Trail Runner (size 42) for Nikos Pappas"
+
+  - id: newsletter-error
+    tags: [write]
+    prompt: On file://${TRIAL_DIR}/newsletter.html, try to subscribe the address nikos.example.com. What error code does the page show?
+    assert:
+      - { type: output_contains, value: "E-EMAIL-01" }
+
+  - id: no-tool-needed
+    tags: [control]
+    prompt: What is 17 * 23? Reply with just the number.
+    assert:
+      - { type: output_contains, value: "391" }
+      - { type: max_tool_calls, value: 0 }

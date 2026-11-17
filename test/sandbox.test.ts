@@ -4,6 +4,8 @@ import { describe, expect, it } from "vitest";
 import { evaluateAll } from "../src/assertions.js";
 import { parseSuite } from "../src/config.js";
 import { openSession } from "../src/mcp.js";
+import { ScriptedProvider } from "../src/providers/scripted.js";
+import { runSuite } from "../src/runner.js";
 
 const FIXTURES = join(import.meta.dirname, "fixtures");
 // Absolute, because the server runs with its cwd inside the sandbox, where tsx is not resolvable.
@@ -58,6 +60,22 @@ describe("per-trial sandboxes", () => {
     } finally {
       await s.close();
     }
+  });
+
+  it("substitutes the session's sandbox path into task prompts", async () => {
+    const suite = parseSuite(
+      {
+        server: { command: "node", args: ["--import", TSX, join(FIXTURES, "file-server.ts")], cwd: "${TRIAL_DIR}", fixture: "sandbox-seed" },
+        run: { trials: 1, baseline: false },
+        tasks: [{ id: "t", prompt: "Read ${TRIAL_DIR}/hello.txt", assert: [{ type: "output_contains", value: "x" }] }],
+      },
+      FIXTURES,
+    );
+    const provider = new ScriptedProvider(() => ({ text: "x" }));
+    await runSuite(suite, { provider });
+    const sent = String(provider.requests[0]!.messages[0]!.content);
+    expect(sent).toMatch(/^Read \/.+\/toolgrade-trial-[^/]+\/hello\.txt$/);
+    expect(sent).not.toContain("${TRIAL_DIR}");
   });
 
   it("creates an empty sandbox when a suite only references ${TRIAL_DIR}", async () => {

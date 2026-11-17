@@ -7,7 +7,6 @@ import type { RunReport } from "../src/core.ts";
 
 const ROOT = new URL(".", import.meta.url).pathname;
 const RESULTS = join(ROOT, "results");
-const pkg = JSON.parse(await readFile(join(ROOT, "package.json"), "utf8")) as { dependencies: Record<string, string> };
 
 interface Entry {
   server: string;
@@ -36,7 +35,10 @@ for (const dir of (await readdir(RESULTS, { withFileTypes: true })).filter((d) =
   for (const file of (await readdir(join(RESULTS, dir))).filter((f) => f.endsWith(".json"))) {
     const r = JSON.parse(await readFile(join(RESULTS, dir, file), "utf8")) as RunReport;
     const server = file.replace(/\.json$/, "");
-    const pkgName = `@modelcontextprotocol/server-${server}`;
+    // Suites are named "<package>@<version>"; scoped packages contain "@" too, so split at the last one.
+    const at = r.suite.lastIndexOf("@");
+    const pkgName = at > 0 ? r.suite.slice(0, at) : r.suite;
+    const pkgVersion = at > 0 ? r.suite.slice(at + 1) : "unknown";
     const o = r.overall;
     const tasks = r.tasks;
     const graded = tasks.filter((t) => t.tools.rate.n > 0);
@@ -44,7 +46,7 @@ for (const dir of (await readdir(RESULTS, { withFileTypes: true })).filter((d) =
     entries.push({
       server,
       package: pkgName,
-      version: pkg.dependencies[pkgName] ?? "unknown",
+      version: pkgVersion,
       model: r.agentModel,
       provider: r.provider,
       date: r.startedAt.slice(0, 10),

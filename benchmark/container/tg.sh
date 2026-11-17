@@ -4,6 +4,7 @@
 #   benchmark/container/tg.sh build                   build the runner image
 #   benchmark/container/tg.sh run <model> [suite...]  run suites (results land in benchmark/results)
 #   benchmark/container/tg.sh pull <model>            download a model into the Ollama volume
+#   benchmark/container/tg.sh exec <cmd> [args...]     run a command inside the locked-down runner
 #   benchmark/container/tg.sh down                    stop the containers and the machine
 set -euo pipefail
 cd "$(dirname "$0")/../.."
@@ -52,10 +53,18 @@ case "${1:-}" in
     MODEL=${2:?model}; shift 2
     mkdir -p benchmark/results
     $C run --rm --network tg-net \
-      --read-only --tmpfs /tmp:rw,size=512m --cap-drop ALL --security-opt no-new-privileges \
+      --read-only --tmpfs /tmp:rw,size=1g --cap-drop ALL --security-opt no-new-privileges \
       -e OUT_DIR="${OUT_DIR:-}" -e LOCAL_MODEL=1 \
+      -e TRIALS="${TRIALS:-}" -e CONCURRENCY="${CONCURRENCY:-}" -e REQUEST_TIMEOUT="${REQUEST_TIMEOUT:-}" \
       -v "$PWD/benchmark/results:/toolgrade/benchmark/results:rw" \
       "$RUNNER_IMAGE" openai "$MODEL" http://tg-ollama:11434/v1 "$@"
+    ;;
+  exec)
+    # Any command inside the locked-down runner, e.g.: tg.sh exec node dist/cli.js inspect benchmark/suites/git.yaml
+    shift
+    $C run --rm --network tg-net \
+      --read-only --tmpfs /tmp:rw,size=1g --cap-drop ALL --security-opt no-new-privileges \
+      --entrypoint "$1" "$RUNNER_IMAGE" "${@:2}"
     ;;
   down)
     $C stop tg-ollama >/dev/null 2>&1 || true

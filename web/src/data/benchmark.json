@@ -1,9 +1,9 @@
 {
-  "generatedAt": "2026-11-16T17:53:47.816Z",
+  "generatedAt": "2026-11-17T11:27:39.049Z",
   "entries": [
     {
       "server": "memory",
-      "package": "@modelcontextprotocol/server-memory",
+      "package": "server-memory",
       "version": "2.1.1",
       "model": "qwen3:8b",
       "provider": "openai-compatible",
@@ -85,7 +85,7 @@
     },
     {
       "server": "filesystem",
-      "package": "@modelcontextprotocol/server-filesystem",
+      "package": "server-filesystem",
       "version": "2.3.0",
       "model": "qwen3:8b",
       "provider": "openai-compatible",
@@ -175,7 +175,7 @@
     },
     {
       "server": "sequential-thinking",
-      "package": "@modelcontextprotocol/server-sequential-thinking",
+      "package": "server-sequential-thinking",
       "version": "2.1.1",
       "model": "qwen3:8b",
       "provider": "openai-compatible",

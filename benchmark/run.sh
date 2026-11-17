@@ -5,6 +5,7 @@
 #   benchmark/run.sh anthropic claude-sonnet-5                     # needs ANTHROPIC_API_KEY
 # Writes one report per server to benchmark/results/<date>-<model>/<server>.json
 # OUT_DIR overrides the results folder (e.g. to finish a run started on an earlier day).
+# TRIALS, CONCURRENCY and REQUEST_TIMEOUT (seconds) override the suite / CLI defaults, e.g. for CPU-only hosts.
 set -uo pipefail
 cd "$(dirname "$0")/.."
 PROVIDER=${1:?provider}; MODEL=${2:?model}; BASE_URL=${3:-http://localhost:11434/v1}
@@ -17,6 +18,7 @@ for suite in "${SUITES[@]}"; do
   name=$(basename "$suite" .yaml)
   echo "=== $name ($MODEL)"
   node dist/cli.js run "$suite" --provider "$PROVIDER" --base-url "$BASE_URL" --model "$MODEL" ${LOCAL_MODEL:+--local-model} \
+    ${TRIALS:+--trials "$TRIALS"} ${CONCURRENCY:+--concurrency "$CONCURRENCY"} ${REQUEST_TIMEOUT:+--request-timeout "$REQUEST_TIMEOUT"} \
     --out-dir "$OUT/.runs/$name" --markdown "$OUT/$name.md" > "$OUT/$name.log" 2>&1
   echo "exit=$?"
   cp "$OUT/.runs/$name/latest.json" "$OUT/$name.json" 2>/dev/null || echo "no report for $name"

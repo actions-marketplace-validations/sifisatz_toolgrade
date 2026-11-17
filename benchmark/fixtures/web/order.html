@@ -1,0 +1,44 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Northwind Outdoor - Order</title>
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+  <header>
+    <h1>Northwind Outdoor</h1>
+    <nav><a href="index.html">Shop</a> | <a href="shipping.html">Shipping</a> | <a href="order.html">Order</a> | <a href="newsletter.html">Newsletter</a></nav>
+  </header>
+  <main>
+    <h2>Place an order</h2>
+    <form id="order">
+      <label>Product
+        <select name="product" id="product">
+          <option value="">Choose a product</option>
+          <option>Trail Runner</option>
+          <option>Hiking Boot</option>
+          <option>Rain Jacket</option>
+          <option>Wool Socks</option>
+        </select>
+      </label>
+      <label>Quantity <input name="quantity" id="quantity" type="number" min="1" max="10" value="1"></label>
+      <label>Size (EU) <input name="size" id="size" type="number" min="35" max="48"></label>
+      <label>Full name <input name="name" id="name" type="text"></label>
+      <button type="submit">Place order</button>
+    </form>
+    <p id="result" role="status"></p>
+  </main>
+  <script>
+    document.getElementById("order").addEventListener("submit", (e) => {
+      e.preventDefault();
+      const f = new FormData(e.target);
+      const product = f.get("product"), qty = Number(f.get("quantity")), size = f.get("size"), name = String(f.get("name") || "").trim();
+      const out = document.getElementById("result");
+      if (!product || !name || !size) { out.textContent = "Please choose a product and fill in size and full name."; return; }
+      const ref = "NW-" + (1000 + qty * 37 + Number(size)) ;
+      out.textContent = "Order confirmed: " + qty + " x " + product + " (size " + size + ") for " + name + ". Reference " + ref + ".";
+    });
+  </script>
+</body>
+</html>

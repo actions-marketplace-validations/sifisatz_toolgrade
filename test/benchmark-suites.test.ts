@@ -2,7 +2,7 @@
 // reference solution must pass and the untouched starting state (what a no-tool agent leaves
 // behind) must fail. A check that cannot tell the two apart would make the leaderboard lie.
 import { existsSync } from "node:fs";
-import { join } from "node:path";
+import { delimiter, join } from "node:path";
 import { describe, expect, it } from "vitest";
 import type { Trajectory } from "../src/agent.js";
 import { evaluateAll } from "../src/assertions.js";
@@ -10,7 +10,18 @@ import { loadSuite, type Suite } from "../src/config.js";
 import { openSession } from "../src/mcp.js";
 
 const ROOT = join(import.meta.dirname, "..", "benchmark");
-const installed = existsSync(join(ROOT, "node_modules", "@modelcontextprotocol", "server-filesystem"));
+const onPath = (bin: string) => (process.env.PATH ?? "").split(delimiter).some((dir) => existsSync(join(dir, bin)));
+const npmInstalled = (pkg: string) => existsSync(join(ROOT, "node_modules", pkg));
+// The npm servers install with `pnpm install` in benchmark/; the rest exist only in the runner image.
+const AVAILABLE: Record<string, () => boolean> = {
+  filesystem: () => npmInstalled("@modelcontextprotocol/server-filesystem"),
+  memory: () => npmInstalled("@modelcontextprotocol/server-memory"),
+  "sequential-thinking": () => npmInstalled("@modelcontextprotocol/server-sequential-thinking"),
+  playwright: () => npmInstalled("@playwright/mcp"),
+  git: () => onPath("mcp-server-git") && existsSync(join(ROOT, "fixtures", "git", "repo")),
+  sqlite: () => onPath("toolbox") && existsSync(join(ROOT, "fixtures", "sqlite", "shop.db")),
+  time: () => onPath("mcp-server-time"),
+};
 
 type Step = [tool: string, args: Record<string, unknown>];
 type Reference = { answer?: string; steps?: Step[] };
@@ -68,11 +79,60 @@ const REFERENCES: Record<string, Record<string, Reference>> = {
     "discount-chain": { answer: "The final price is 162 euros." },
     "no-tool-needed": { answer: "391" },
   },
+  time: {
+    "tokyo-to-kathmandu": { answer: "It is 05:45 in Kathmandu." },
+    "dubai-to-honolulu": { answer: "It is 00:30 in Honolulu." },
+    "phoenix-to-shanghai": { answer: "It is 23:15 in Shanghai." },
+    "brisbane-to-kolkata": { answer: "It is 18:30 in Kolkata." },
+    "kathmandu-vs-kolkata": { answer: "Kathmandu is 15 minutes ahead of Kolkata." },
+    "no-tool-needed": { answer: "391" },
+  },
+  git: {
+    "last-commit": { answer: "Linus made it; it fixed an off-by-one in pagination." },
+    "uncommitted-files": { answer: "src/app.py is modified and notes.txt is untracked." },
+    "feature-branch": { answer: "It adds case-insensitive fuzzy search." },
+    "commit-change": {
+      steps: [
+        ["git_add", { repo_path: "${TRIAL_DIR}", files: ["src/app.py"] }],
+        ["git_commit", { repo_path: "${TRIAL_DIR}", message: "Return no results for an empty query" }],
+      ],
+    },
+    "create-branch": { steps: [["git_create_branch", { repo_path: "${TRIAL_DIR}", branch_name: "release/1.2", base_branch: "main" }]] },
+    "no-tool-needed": { answer: "391" },
+  },
+  sqlite: {
+    "top-customer": { answer: "Maria Papadopoulou." },
+    "pending-value": { answer: "297 EUR." },
+    "out-of-stock": { answer: "City Sneaker." },
+    "ship-order": { steps: [["execute_sql", { sql: "UPDATE orders SET status = 'shipped' WHERE id = 3" }]] },
+    "add-customer": { steps: [["execute_sql", { sql: "INSERT INTO customers (name, country) VALUES ('Sofia Andersson', 'SE')" }]] },
+    "no-tool-needed": { answer: "391" },
+  },
+  playwright: {
+    "product-price": { answer: "The Hiking Boot costs 149.00 EUR." },
+    "cheap-in-stock": { answer: "2 products." },
+    "shipping-cost": { answer: "7.50 EUR." },
+    "place-order": {
+      answer: "The page shows reference NW-1116.",
+      steps: [
+        ["browser_navigate", { url: "file://${TRIAL_DIR}/order.html" }],
+        [
+          "browser_evaluate",
+          {
+            function:
+              "() => { const f = document.getElementById('order'); f.product.value = 'Trail Runner'; f.quantity.value = '2'; f.size.value = '42'; f.name.value = 'Nikos Pappas'; f.requestSubmit(); return document.getElementById('result').textContent; }",
+          },
+        ],
+      ],
+    },
+    "newsletter-error": { answer: "It shows code E-EMAIL-01." },
+    "no-tool-needed": { answer: "391" },
+  },
 };
 
-describe.skipIf(!installed)("public benchmark suites", () => {
+describe("public benchmark suites", () => {
   for (const [name, refs] of Object.entries(REFERENCES)) {
-    describe(name, async () => {
+    describe.skipIf(!AVAILABLE[name]?.())(name, async () => {
       const suite = await loadSuite(join(ROOT, "suites", `${name}.yaml`));
 
       it("has a reference solution for every task", () => {

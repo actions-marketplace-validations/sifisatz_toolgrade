@@ -1,0 +1,67 @@
+# ToolGrade public benchmark - mcp-server-git 2026.11.11 (PyPI, pinned in benchmark/container/Containerfile)
+# Each trial gets a fresh copy of the fixture repository built by benchmark/fixtures/build.sh:
+# 4 commits on main and feature/fuzzy, a modified src/app.py and an untracked notes.txt.
+name: mcp-server-git@2026.11.11
+
+server:
+  command: mcp-server-git
+  args: ["--repository", "${TRIAL_DIR}"]
+  fixture: ../fixtures/git/repo
+
+agent:
+  max_turns: 10
+  max_tokens: 6000
+
+run:
+  trials: 3
+  baseline: true
+  concurrency: 2
+
+tasks:
+  - id: last-commit
+    tags: [read]
+    prompt: In the git repository at ${TRIAL_DIR}, who made the most recent commit on main, and what did it fix?
+    assert:
+      - { type: output_contains, value: ["Linus", "pagination"] }
+
+  - id: uncommitted-files
+    tags: [read]
+    prompt: In the git repository at ${TRIAL_DIR}, which files have uncommitted changes or are untracked?
+    assert:
+      - { type: output_contains, value: ["app.py", "notes.txt"] }
+
+  - id: feature-branch
+    tags: [read]
+    prompt: In the git repository at ${TRIAL_DIR}, what does the latest commit on the branch feature/fuzzy add?
+    assert:
+      - { type: output_regex, pattern: "case.?insensitive" }
+
+  - id: commit-change
+    tags: [write]
+    prompt: In the git repository at ${TRIAL_DIR}, commit the change to src/app.py with the message "Return no results for an empty query". Do not commit notes.txt.
+    assert:
+      - type: state
+        tool: git_log
+        args: { repo_path: "${TRIAL_DIR}", max_count: 1 }
+        contains: "Return no results for an empty query"
+      - type: state
+        tool: git_status
+        args: { repo_path: "${TRIAL_DIR}" }
+        contains: "notes.txt"
+        not_contains: "app.py"
+
+  - id: create-branch
+    tags: [write]
+    prompt: In the git repository at ${TRIAL_DIR}, create a branch named release/1.2 from main.
+    assert:
+      - type: state
+        tool: git_branch
+        args: { repo_path: "${TRIAL_DIR}", branch_type: "local" }
+        contains: "release/1.2"
+
+  - id: no-tool-needed
+    tags: [control]
+    prompt: What is 17 * 23? Reply with just the number.
+    assert:
+      - { type: output_contains, value: "391" }
+      - { type: max_tool_calls, value: 0 }
