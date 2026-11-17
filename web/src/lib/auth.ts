@@ -14,6 +14,14 @@ import {
   user,
   verification,
 } from "@/db/schema";
+import { logDebug, logError, logInfo, logWarn } from "@/lib/logger";
+
+const AUTH_LOG_FNS = {
+  debug: logDebug,
+  info: logInfo,
+  warn: logWarn,
+  error: logError,
+};
 
 /** Every org this user is the sole owner of - deleting their account would leave these orphaned. */
 export async function soleOwnerOrgs(userId: string): Promise<string[]> {
@@ -55,6 +63,17 @@ function createAuth() {
     }),
     secret: process.env.BETTER_AUTH_SECRET,
     baseURL: process.env.BETTER_AUTH_URL,
+    // Routes Better Auth's own internal logging through our structured logger (see lib/logger.ts)
+    // instead of its default plain console output, so auth errors show up with the same
+    // requestId-correlatable JSON shape as everything else.
+    logger: {
+      log: (level, message, ...args) => {
+        AUTH_LOG_FNS[level](message, {
+          category: "better-auth",
+          ...(args.length > 0 ? { details: args } : {}),
+        });
+      },
+    },
     emailAndPassword: { enabled: true, minPasswordLength: 10 },
     // Our tables use uuid keys with database defaults.
     advanced: { database: { generateId: "uuid" } },

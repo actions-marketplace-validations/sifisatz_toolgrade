@@ -2,6 +2,7 @@ import type Stripe from "stripe";
 import { getDb } from "@/db/client";
 import { stripeEvents } from "@/db/schema";
 import { upsertFromSubscription } from "@/lib/billing";
+import { logError, logInfo, logWarn, newRequestId } from "@/lib/logger";
 import { getStripe, requireWebhookSecret } from "@/lib/stripe";
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
@@ -17,9 +18,18 @@ const HANDLED_TYPES = new Set([
 ]);
 
 export async function POST(request: Request) {
+  const requestId = newRequestId();
+  const startedAt = Date.now();
+  const category = "stripe-webhook";
+
   const signature = request.headers.get("stripe-signature");
-  if (!signature)
+  if (!signature) {
+    logWarn("stripe webhook rejected: missing stripe-signature header", {
+      requestId,
+      category,
+    });
     return json({ error: "missing stripe-signature header" }, 400);
+  }
 
   // Signature verification needs the exact raw bytes Stripe signed - never JSON.parse first.
   const payload = await request.text();
@@ -31,6 +41,11 @@ export async function POST(request: Request) {
       requireWebhookSecret(),
     );
   } catch (err) {
+    logWarn("stripe webhook rejected: invalid signature", {
+      requestId,
+      category,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return json(
       {
         error: `invalid signature: ${err instanceof Error ? err.message : String(err)}`,
@@ -40,18 +55,56 @@ export async function POST(request: Request) {
   }
 
   const db = await getDb();
-  // A retried delivery (Stripe retries on anything but 2xx) or a duplicate send must not re-apply
-  // its effect - this insert is the idempotency check, atomic with no separate read-then-write race.
-  const inserted = await db
-    .insert(stripeEvents)
-    .values({ id: event.id })
-    .onConflictDoNothing()
-    .returning({ id: stripeEvents.id });
-  if (inserted.length === 0) return json({ received: true, duplicate: true });
-
-  if (HANDLED_TYPES.has(event.type)) {
-    await upsertFromSubscription(db, event.data.object as Stripe.Subscription);
+  // The idempotency marker and the actual effect commit together: if upsertFromSubscription
+  // throws, the marker insert rolls back too, so a retried delivery still sees this event as
+  // unprocessed and tries again - recording "done" before confirming it actually succeeded would
+  // mean a transient failure is never retried, only logged and quietly dropped.
+  let outcome: "duplicate" | "processed" | "failed";
+  try {
+    outcome = await db.transaction(async (tx) => {
+      const inserted = await tx
+        .insert(stripeEvents)
+        .values({ id: event.id })
+        .onConflictDoNothing()
+        .returning({ id: stripeEvents.id });
+      if (inserted.length === 0) return "duplicate" as const;
+      if (HANDLED_TYPES.has(event.type)) {
+        await upsertFromSubscription(
+          tx,
+          event.data.object as Stripe.Subscription,
+        );
+      }
+      return "processed" as const;
+    });
+  } catch (err) {
+    logError("stripe webhook handler failed", {
+      requestId,
+      category,
+      eventType: event.type,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    outcome = "failed";
   }
 
+  if (outcome === "failed") {
+    // Non-2xx so Stripe retries with backoff - this is a bug or outage to fix, not something to
+    // paper over by acknowledging an event we never actually applied.
+    return json({ error: "internal error processing webhook" }, 500);
+  }
+  if (outcome === "duplicate") {
+    logInfo("stripe webhook duplicate delivery ignored", {
+      requestId,
+      category,
+      eventType: event.type,
+    });
+    return json({ received: true, duplicate: true });
+  }
+
+  logInfo("stripe webhook processed", {
+    requestId,
+    category,
+    eventType: event.type,
+    durationMs: Date.now() - startedAt,
+  });
   return json({ received: true });
 }

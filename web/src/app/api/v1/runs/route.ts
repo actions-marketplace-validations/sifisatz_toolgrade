@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { apiKeys, organization, projects, runs } from "@/db/schema";
 import { bearerToken, hashApiKey } from "@/lib/api-keys";
 import { hasNul, MAX_UPLOAD_BYTES, toRunRow, UploadSchema } from "@/lib/ingest";
+import { logError, logInfo, logWarn, newRequestId } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { getUsageStatus } from "@/lib/usage";
 
@@ -36,12 +37,22 @@ async function readCapped(
 
 /** Ingest a run report from the CLI: `toolgrade run --upload <origin>` with TOOLGRADE_API_KEY. */
 export async function POST(request: Request) {
+  const requestId = newRequestId();
+  const startedAt = Date.now();
+  const category = "ingest";
+
   const token = bearerToken(request.headers.get("authorization"));
-  if (!token)
+  if (!token) {
+    logWarn("ingest rejected: missing or malformed bearer token", {
+      requestId,
+      category,
+      durationMs: Date.now() - startedAt,
+    });
     return json(
       { error: "missing or malformed API key (Authorization: Bearer tg_...)" },
       401,
     );
+  }
 
   // Authenticate before touching the body, so unauthenticated callers cannot make us buffer it.
   const db = await getDb();
@@ -58,7 +69,14 @@ export async function POST(request: Request) {
     .innerJoin(organization, eq(projects.orgId, organization.id))
     .where(and(eq(apiKeys.hash, hashApiKey(token)), isNull(apiKeys.revokedAt)))
     .limit(1);
-  if (!key) return json({ error: "invalid or revoked API key" }, 401);
+  if (!key) {
+    logWarn("ingest rejected: invalid or revoked API key", {
+      requestId,
+      category,
+      durationMs: Date.now() - startedAt,
+    });
+    return json({ error: "invalid or revoked API key" }, 401);
+  }
 
   const withinRate = await checkRateLimit(
     db,
@@ -67,6 +85,13 @@ export async function POST(request: Request) {
     INGEST_RATE_LIMIT.max,
   );
   if (!withinRate) {
+    logWarn("ingest rejected: rate limited", {
+      requestId,
+      category,
+      orgId: key.orgId,
+      projectId: key.projectId,
+      durationMs: Date.now() - startedAt,
+    });
     return json(
       {
         error: `too many uploads for this API key - at most ${INGEST_RATE_LIMIT.max} per ${INGEST_RATE_LIMIT.windowSeconds}s`,
@@ -79,6 +104,15 @@ export async function POST(request: Request) {
   // Does not silently drop the report - the CLI surfaces this 402 and its message directly.
   const { used, limit } = await getUsageStatus(db, key.orgId, key.projectId);
   if (used >= limit) {
+    logWarn("ingest rejected: usage limit reached", {
+      requestId,
+      category,
+      orgId: key.orgId,
+      projectId: key.projectId,
+      used,
+      limit,
+      durationMs: Date.now() - startedAt,
+    });
     const billingUrl = new URL(
       `/app/${key.orgSlug}/${key.projectSlug}/settings`,
       request.url,
@@ -100,20 +134,40 @@ export async function POST(request: Request) {
     return tooLarge();
   const raw = await readCapped(request, MAX_UPLOAD_BYTES);
   if (raw === null) return tooLarge();
-  if (hasNul(raw))
+  if (hasNul(raw)) {
+    logWarn("ingest rejected: NUL bytes in body", {
+      requestId,
+      category,
+      orgId: key.orgId,
+      projectId: key.projectId,
+    });
     return json(
       { error: "report contains NUL characters, which cannot be stored" },
       422,
     );
+  }
 
   let body: unknown;
   try {
     body = JSON.parse(raw);
   } catch {
+    logWarn("ingest rejected: body is not valid JSON", {
+      requestId,
+      category,
+      orgId: key.orgId,
+      projectId: key.projectId,
+    });
     return json({ error: "body is not valid JSON" }, 400);
   }
   const parsed = UploadSchema.safeParse(body);
-  if (!parsed.success)
+  if (!parsed.success) {
+    logWarn("ingest rejected: schema validation failed", {
+      requestId,
+      category,
+      orgId: key.orgId,
+      projectId: key.projectId,
+      issueCount: parsed.error.issues.length,
+    });
     return json(
       {
         error: "not a toolgrade v1 run report",
@@ -121,6 +175,7 @@ export async function POST(request: Request) {
       },
       422,
     );
+  }
 
   let runId: string;
   try {
@@ -130,16 +185,28 @@ export async function POST(request: Request) {
       .returning({ id: runs.id });
     runId = run!.id;
   } catch (err) {
-    console.error(
-      "run insert failed",
-      err instanceof Error ? err.message : err,
-    );
+    logError("ingest failed: run insert failed", {
+      requestId,
+      category,
+      orgId: key.orgId,
+      projectId: key.projectId,
+      error: err instanceof Error ? err.message : String(err),
+    });
     return json({ error: "report could not be stored" }, 422);
   }
   await db
     .update(apiKeys)
     .set({ lastUsedAt: new Date() })
     .where(eq(apiKeys.id, key.id));
+
+  logInfo("ingest succeeded", {
+    requestId,
+    category,
+    orgId: key.orgId,
+    projectId: key.projectId,
+    runId,
+    durationMs: Date.now() - startedAt,
+  });
 
   const url = new URL(
     `/app/${key.orgSlug}/${key.projectSlug}/runs/${runId}`,

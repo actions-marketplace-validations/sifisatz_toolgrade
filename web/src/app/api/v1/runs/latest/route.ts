@@ -6,6 +6,7 @@ import {
   bearerToken,
   markApiKeyUsed,
 } from "@/lib/api-keys";
+import { logWarn, newRequestId } from "@/lib/logger";
 import { checkRateLimit } from "@/lib/rate-limit";
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
@@ -16,16 +17,30 @@ const BASELINE_RATE_LIMIT = { windowSeconds: 60, max: 60 };
  * to compare a new run against in CI without the caller having to manage its own build artifacts.
  */
 export async function GET(request: Request) {
+  const requestId = newRequestId();
+  const category = "baseline";
+
   const token = bearerToken(request.headers.get("authorization"));
-  if (!token)
+  if (!token) {
+    logWarn("baseline rejected: missing or malformed bearer token", {
+      requestId,
+      category,
+    });
     return json(
       { error: "missing or malformed API key (Authorization: Bearer tg_...)" },
       401,
     );
+  }
 
   const db = await getDb();
   const key = await authenticateApiKey(db, token);
-  if (!key) return json({ error: "invalid or revoked API key" }, 401);
+  if (!key) {
+    logWarn("baseline rejected: invalid or revoked API key", {
+      requestId,
+      category,
+    });
+    return json({ error: "invalid or revoked API key" }, 401);
+  }
 
   const withinRate = await checkRateLimit(
     db,
@@ -34,6 +49,11 @@ export async function GET(request: Request) {
     BASELINE_RATE_LIMIT.max,
   );
   if (!withinRate) {
+    logWarn("baseline rejected: rate limited", {
+      requestId,
+      category,
+      projectId: key.projectId,
+    });
     return json(
       {
         error: `too many requests for this API key - at most ${BASELINE_RATE_LIMIT.max} per ${BASELINE_RATE_LIMIT.windowSeconds}s`,

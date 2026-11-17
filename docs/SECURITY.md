@@ -118,7 +118,8 @@ a point-in-time backup snapshot that already existed before the delete.
   to ever receive the email) would be worse than the current state of not requiring it.
 - **Two-factor authentication**: not implemented; would be a reasonable addition once there are
   real paying customers whose accounts are worth a second factor.
-- **Structured security audit logging** (who changed what, when) beyond `lastUsedAt` on API keys:
-  not implemented. Phase 6 of the roadmap covers structured logging more generally.
-- **A "Members" UI page**: the underlying actions (above) exist and are tested; no page links to
-  them yet.
+- **Structured operational logging** (API/ingest/webhook/cron requests, correlated by a
+  `requestId`) is implemented - see [web/README.md](../web/README.md)'s Operations section. A
+  separate, persisted **security audit trail** (e.g. "user X removed member Y at time T," queryable
+  after the fact, independent of whatever log retention Vercel's own dashboard happens to keep) is
+  not - today that history only exists as log lines, not as rows in the database.

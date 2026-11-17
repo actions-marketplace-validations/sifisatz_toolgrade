@@ -126,6 +126,38 @@ describe("POST /api/stripe/webhook", () => {
     expect(res.status).toBe(200);
   });
 
+  it("returns 500 (so Stripe retries) and rolls back the idempotency marker when processing throws", async () => {
+    const payload = JSON.stringify({
+      id: "evt_broken_1",
+      type: "customer.subscription.created",
+      // No `items` at all - upsertFromSubscription's `sub.items.data[0]` throws a TypeError
+      // rather than quietly no-op'ing, exercising a genuine processing failure.
+      data: {
+        object: {
+          id: "sub_broken",
+          customer: "cus_broken",
+          status: "active",
+          metadata: { organizationId: orgId },
+        },
+      },
+    });
+    const res = await post(payload, sign(payload));
+    expect(res.status).toBe(500);
+
+    const db = await getDb();
+    const rows = await db.select().from(subscriptions);
+    expect(
+      rows.find((r) => r.providerSubscriptionId === "sub_broken"),
+    ).toBeUndefined();
+
+    // A retried delivery of the same event id must not be treated as an already-processed
+    // duplicate - the failed attempt's idempotency marker must have rolled back with it.
+    const retry = await post(payload, sign(payload));
+    expect(retry.status).toBe(500);
+    const retryBody = (await retry.json()) as { duplicate?: boolean };
+    expect(retryBody.duplicate).toBeUndefined();
+  });
+
   it("marks a subscription canceled on customer.subscription.deleted", async () => {
     const payload = JSON.stringify(
       subscriptionEvent("customer.subscription.deleted", {

@@ -104,12 +104,46 @@ SEED_OUT_DIR=.data/prod pnpm seed
 | `STRIPE_WEBHOOK_SECRET` | From the Stripe webhook endpoint pointed at `/api/stripe/webhook` |
 | `STRIPE_PRICE_EARLY_ACCESS`, `STRIPE_PRICE_TEAM`, `STRIPE_PRICE_GROWTH` | Stripe Price ids for the three paid plans (see `lib/plans.ts`) |
 
+## Operations
+
+- **Logging**: every API route and the retention cron log structured JSON lines through
+  `lib/logger.ts` (`logInfo`/`logWarn`/`logError`) - one line per event, with a `requestId` to
+  correlate every line from one request, `orgId`/`projectId`/`runId` where known, and a
+  `category`. Better Auth's own internal logging is routed through the same logger. Known-
+  sensitive field names (`password`, `token`, `apiKey`, `authorization`, ...) are redacted
+  automatically; this only catches values passed as a *field*, never ones baked into a message
+  string, which is why call sites never do that. On Vercel these lines land in the project's own
+  Logs tab - no separate log aggregation service is wired up (see "not done" below).
+- **Health check**: `GET /api/health` runs a trivial query against the database and reports
+  `{status: "ok", database: "ok"}` (200) or `{status: "degraded", database: "error"}` (503) -
+  nothing about the connection string, driver, or stack trace. Point an uptime monitor at it.
+- **Backups**: this project does not run its own backup job. Production Postgres is Neon via the
+  Vercel integration, which takes continuous backups with point-in-time recovery on its own -
+  restoring a specific point in time is done from the Neon dashboard/CLI (or `vercel env` +
+  Neon's branching feature to restore into a new branch, verify, then promote it), not from
+  anything in this repo. PGlite (local/demo) has no backups; it is explicitly disposable.
+- **Migrations**: run once per deploy, in the Vercel build (`pnpm db:migrate`), never on request
+  (see `DB_MIGRATE_ON_CONNECT` in `src/db/client.ts` for the one exception: local/demo only).
+  There is no automated rollback for a bad migration - fix forward with a new migration, or in a
+  genuine emergency restore the database to a pre-migration point via Neon (above) and redeploy
+  the previous commit. Never run a destructive migration (a column/table drop) without a
+  deliberate, reviewed step - `pnpm db:generate` is additive by default; a destructive change
+  should be reviewed by hand before it ever reaches `pnpm db:migrate` in production.
+- **Rolling back a bad deploy**: redeploy a previous, known-good commit from the Vercel dashboard
+  (or `vercel rollback`). This only reverts the application code - if the bad deploy's migration
+  already ran and is incompatible with the older code, a code-only rollback is not enough; restore
+  the database first (above).
+- **Not done, deliberately**: no separate error-tracking service (Sentry or similar) - structured
+  logs to Vercel's own Logs tab are the extent of it for now. Revisit once there are real paying
+  customers whose incidents justify a few more dollars a month; adding it before that would be
+  exactly the kind of recurring infrastructure expense this project's budget explicitly avoids
+  (see root `docs/PLAN.md`).
+
 ## Not in the PoC
 
-Email verification and password reset (need an email provider), social sign-in, invitations UI,
-a billing UI (Checkout/portal/webhook handling exist in `lib/billing.ts` and
-`api/stripe/webhook`, but nothing in the dashboard links to them yet), model-drift alerts,
-hosted runners.
+Email verification and password reset (need an email provider), social sign-in, invitations UI
+(a "Members" page exists for managing existing members, but there is no way to invite someone
+new yet), model-drift alerts, hosted runners.
 
 ## Marketing site on GitHub Pages
 
