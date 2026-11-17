@@ -99,6 +99,7 @@ SEED_OUT_DIR=.data/prod pnpm seed
 | `BETTER_AUTH_SECRET` | 32+ random bytes; rotate with `BETTER_AUTH_SECRETS` |
 | `BETTER_AUTH_URL` | Public origin, e.g. `https://app.toolgrade.dev` |
 | `DEMO_PASSWORD` | Optional: enables "Explore the demo workspace"; omit to disable it |
+| `CRON_SECRET` | Authorizes the daily retention-cleanup cron (`vercel.json`'s `crons`) - Vercel sends `Authorization: Bearer $CRON_SECRET` automatically when this is set. Unset, that endpoint refuses every request rather than silently skipping auth |
 | `STRIPE_SECRET_KEY` | Stripe API key. Required only once billing is wired up to a real Stripe account - unset, every Stripe-touching code path throws instead of silently no-opping |
 | `STRIPE_WEBHOOK_SECRET` | From the Stripe webhook endpoint pointed at `/api/stripe/webhook` |
 | `STRIPE_PRICE_EARLY_ACCESS`, `STRIPE_PRICE_TEAM`, `STRIPE_PRICE_GROWTH` | Stripe Price ids for the three paid plans (see `lib/plans.ts`) |
