@@ -36,6 +36,14 @@ function open(): { db: Db; ready: Promise<void> } {
     };
   }
   // Zero-infra local mode: embedded Postgres (WASM), single connection, demo/dev only.
+  // Vercel's filesystem (and any in-memory state) does not survive past a single invocation,
+  // so falling back here in production would silently discard every write.
+  if (process.env.VERCEL_ENV === "production") {
+    throw new Error(
+      "DATABASE_URL is not set. PGlite is dev/demo-only and loses all data in production " +
+        "(Vercel's filesystem does not persist between invocations) — set DATABASE_URL.",
+    );
+  }
   const dataDir =
     process.env.PGLITE_DIR ?? join(process.cwd(), ".data", "pglite");
   if (dataDir !== "memory://") mkdirSync(dataDir, { recursive: true });

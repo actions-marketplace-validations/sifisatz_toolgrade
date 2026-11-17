@@ -44,7 +44,7 @@ async function Project({
   if (!found) notFound();
   const { project, org } = found;
   const base = `/app/${org.slug}/${project.slug}`;
-  const runs = await listRuns(project.id);
+  const { rows: runs, total: totalRuns } = await listRuns(project.id);
   const [latest, previous] = runs;
   const chrono = [...runs].reverse();
   const lastTen = runs.slice(0, 10);
@@ -174,7 +174,9 @@ async function Project({
             <CardHeader>
               <CardTitle>Runs</CardTitle>
               <CardDescription>
-                The latest 100 runs for this project, newest first.
+                {totalRuns > runs.length
+                  ? `Showing the latest ${runs.length} of ${totalRuns} runs, newest first.`
+                  : "Every run for this project, newest first."}
               </CardDescription>
             </CardHeader>
             <CardContent className="px-2">

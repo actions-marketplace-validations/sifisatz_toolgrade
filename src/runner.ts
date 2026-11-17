@@ -1,6 +1,6 @@
 import { AgentRunError, runAgent, toAnthropicTools, type Trajectory, type Usage } from "./agent.js";
-import { evaluateAll, type AssertionResult } from "./assertions.js";
-import { isOutcomeAssertion, type AssertionSpec, type Suite, type TaskSpec } from "./config.js";
+import { evaluateAll, withTrialDir, type AssertionResult } from "./assertions.js";
+import { isOutcomeAssertion, isStdio, type AssertionSpec, type Suite, type TaskSpec } from "./config.js";
 import { todoTasks } from "./init.js";
 import { LlmJudge } from "./judge.js";
 import { openSession as defaultOpenSession, type McpSession } from "./mcp.js";
@@ -110,6 +110,7 @@ export async function runSuite(suite: Suite, opts: RunOptions): Promise<RunRepor
   const tasks = selectTasks(suite.tasks, opts.filter);
   const unfinished = todoTasks(tasks);
   if (unfinished.length) throw new Error(`Suite still has TODO placeholders in: ${unfinished.join(", ")} - write real prompts and rubrics first`);
+  warnIfUnisolatedState(suite, tasks, trials);
   const costs = new CostModel(suite.pricing);
   const judge = new LlmJudge(opts.provider, suite.judge.model);
   let judgeIn = 0;
@@ -144,10 +145,12 @@ export async function runSuite(suite: Suite, opts: RunOptions): Promise<RunRepor
     try {
       // Both arms get a fresh server so `state` assertions see an untouched world in the baseline too.
       session = await open(suite.server);
+      // Prompts may name the session's sandbox (e.g. a repository path), like a user would.
+      const prompt = withTrialDir(task.prompt, session.trialDir) as string;
       trajectory = await runAgent({
         provider: opts.provider,
         model: suite.agent.model,
-        prompt: task.prompt,
+        prompt,
         system: suite.agent.system,
         maxTurns: suite.agent.max_turns,
         maxTokens: suite.agent.max_tokens,
@@ -156,7 +159,7 @@ export async function runSuite(suite: Suite, opts: RunOptions): Promise<RunRepor
         session: arm === "tools" ? session : undefined,
       });
       const assertions = await evaluateAll(graded, {
-        prompt: task.prompt,
+        prompt,
         trajectory,
         session,
         judge,
@@ -252,6 +255,22 @@ export async function runSuite(suite: Suite, opts: RunOptions): Promise<RunRepor
     gate: { passed: checks.every((c) => c.passed), checks },
     trials: results,
   };
+}
+
+/**
+ * Only stdio servers get a fresh sandboxed process per trial (see mcp.ts). An HTTP server's state
+ * carries over between trials, so `state` assertions can see leftovers from an earlier trial and
+ * silently misreport pass/fail - warn rather than let that go unnoticed.
+ */
+function warnIfUnisolatedState(suite: Suite, tasks: TaskSpec[], trials: number): void {
+  if (isStdio(suite.server) || trials <= 1) return;
+  const hasState = tasks.some((t) => t.assert.some((a) => a.type === "state"));
+  if (!hasState) return;
+  process.stderr.write(
+    "toolgrade: warning: this suite uses an HTTP MCP server with state assertions and more than one trial. " +
+      "Unlike stdio servers, HTTP servers are not sandboxed per trial - state may leak between trials unless " +
+      "the server itself resets or isolates state per session.\n",
+  );
 }
 
 function selectTasks(tasks: TaskSpec[], filter?: string): TaskSpec[] {

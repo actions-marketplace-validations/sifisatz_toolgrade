@@ -46,7 +46,7 @@ const runSummaryColumns = {
   commitMessage: runs.commitMessage,
 };
 
-export type RunSummary = Awaited<ReturnType<typeof listRuns>>[number];
+export type RunSummary = Awaited<ReturnType<typeof listRuns>>["rows"][number];
 
 /**
  * The org, only if `userId` is a member - with their role. Non-members get undefined, the same
@@ -149,15 +149,20 @@ export const listProjects = cache(async (orgId: string) => {
   });
 });
 
+/** The most recent `limit` runs, plus the project's total run count so callers can tell when older runs were left out. */
 export async function listRuns(projectId: string, limit = 100) {
   await connection();
   const db = await getDb();
-  return db
-    .select(runSummaryColumns)
-    .from(runs)
-    .where(eq(runs.projectId, projectId))
-    .orderBy(desc(runs.createdAt))
-    .limit(limit);
+  const [rows, [totalRow]] = await Promise.all([
+    db
+      .select(runSummaryColumns)
+      .from(runs)
+      .where(eq(runs.projectId, projectId))
+      .orderBy(desc(runs.createdAt))
+      .limit(limit),
+    db.select({ n: count() }).from(runs).where(eq(runs.projectId, projectId)),
+  ]);
+  return { rows, total: totalRow?.n ?? rows.length };
 }
 
 export async function getRun(projectId: string, runId: string) {

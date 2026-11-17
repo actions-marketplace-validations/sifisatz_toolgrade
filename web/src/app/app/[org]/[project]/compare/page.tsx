@@ -63,7 +63,7 @@ async function Compare({
   if (!found) notFound();
   const { project, org } = found;
   const base = `/app/${org.slug}/${project.slug}`;
-  const runs = await listRuns(project.id);
+  const { rows: runs } = await listRuns(project.id);
   const headId = one(query.head) ?? runs[0]?.id;
   const baseId = one(query.base) ?? runs[1]?.id;
   const [head, before] = await Promise.all([
