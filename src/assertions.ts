@@ -33,13 +33,17 @@ async function evaluate(spec: AssertionSpec, ctx: AssertionContext): Promise<Ass
       const needles = toList(spec.value);
       const hay = spec.case_sensitive ? t.finalText : t.finalText.toLowerCase();
       const hits = needles.filter((n) => hay.includes(spec.case_sensitive ? n : n.toLowerCase()));
-      const passed = spec.mode === "any" ? hits.length > 0 : hits.length === needles.length;
+      const found = spec.mode === "any" ? hits.length > 0 : hits.length === needles.length;
+      const passed = spec.negate ? !found : found;
       const missing = needles.filter((n) => !hits.includes(n));
-      return r(passed, passed ? `found ${hits.length}/${needles.length}` : `missing: ${missing.join(", ")}`);
+      if (spec.negate) return r(passed, passed ? `absent, as required (0/${needles.length} found)` : `present but must not be: ${hits.join(", ")}`);
+      return r(passed, found ? `found ${hits.length}/${needles.length}` : `missing: ${missing.join(", ")}`);
     }
     case "output_regex": {
-      const passed = new RegExp(spec.pattern, spec.flags).test(t.finalText);
-      return r(passed, passed ? `matched /${spec.pattern}/` : `no match for /${spec.pattern}/`);
+      const matched = new RegExp(spec.pattern, spec.flags).test(t.finalText);
+      const passed = spec.negate ? !matched : matched;
+      if (spec.negate) return r(passed, passed ? `no match for /${spec.pattern}/, as required` : `matched /${spec.pattern}/ but must not have`);
+      return r(passed, matched ? `matched /${spec.pattern}/` : `no match for /${spec.pattern}/`);
     }
     case "tool_called": {
       const calls = t.toolCalls.filter((c) => c.name === spec.name);

@@ -25,11 +25,15 @@ const Assertion = z.discriminatedUnion("type", [
     value: z.union([z.string(), z.array(z.string()).min(1)]),
     mode: z.enum(["all", "any"]).default("all"),
     case_sensitive: z.boolean().default(false),
+    /** Passes when the value(s) are absent instead of present - e.g. proving a secret was never echoed back. */
+    negate: z.boolean().default(false),
   }),
   z.object({
     type: z.literal("output_regex"),
     pattern: z.string(),
     flags: z.string().default("i"),
+    /** Passes when the pattern does not match instead of when it does. */
+    negate: z.boolean().default(false),
   }),
   z.object({
     type: z.literal("tool_called"),

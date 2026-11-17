@@ -138,8 +138,8 @@ tasks:
 
 | Assertion | Passes when |
 |---|---|
-| `output_contains` | final answer contains `value` (string or list; `mode: all\|any`, `case_sensitive`) |
-| `output_regex` | final answer matches `pattern` (`flags`, default `i`) |
+| `output_contains` | final answer contains `value` (string or list; `mode: all\|any`, `case_sensitive`, `negate` - see below) |
+| `output_regex` | final answer matches `pattern` (`flags`, default `i`; `negate` - see below) |
 | `tool_called` | tool called `min_times..max_times`, optionally with `args_contains` (substring for strings, deep-equal otherwise) |
 | `tool_not_called` | tool never called |
 | `max_tool_calls` | total tool calls <= `value` (use `0` for "tools must not distract") |
@@ -149,6 +149,15 @@ tasks:
 `output_*`, `state` and `llm` are **outcome** assertions; `tool_called`, `tool_not_called` and
 `max_tool_calls` are **process** assertions. The baseline arm is graded on outcomes only (process
 assertions are recorded as skipped); a task with no outcome assertions has no baseline.
+
+`negate: true` on `output_contains`/`output_regex` flips the check to "passes only when absent" -
+for proving a tool never echoes back something it shouldn't (a secret, another user's data), not
+just that it mentions what it should. Combined with `tool_not_called` this is the basis for
+writing MCP security/permission tasks (unauthorized tool usage, excessive permissions, sensitive
+output exposure, resistance to instructions embedded in tool output) as ordinary pass/fail checks -
+see [examples/security-suite.yaml](examples/security-suite.yaml). There is no separate "security
+score": each task is inspectable evidence (which assertion, what it expected, what actually
+happened), the same as any other task.
 
 A trial that does not end normally - `max_turns`, `max_tokens`, `refusal`, context exceeded -
 fails regardless of assertions, and only the last turn's text counts as the answer. Trials that

@@ -16,6 +16,7 @@ describe("parseSuite", () => {
     expect(isStdio(s.server) && s.server.cwd).toBe("/repo/evals/srv");
     const a = s.tasks[0]!.assert[0]!;
     expect(a.type === "output_contains" && a.mode).toBe("all");
+    expect(a.type === "output_contains" && a.negate).toBe(false);
   });
 
   it("accepts an HTTP server", () => {

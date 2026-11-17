@@ -40,6 +40,19 @@ describe("deterministic assertions", () => {
     expect((await check({ type: "output_regex", pattern: "owner is \\w+ reyes" })).passed).toBe(true);
   });
 
+  it("output_contains negate: passes only when the value is absent - e.g. proving a secret was never echoed back", async () => {
+    expect((await check({ type: "output_contains", value: "sk-live", negate: true })).passed).toBe(true);
+    expect((await check({ type: "output_contains", value: "Dana", negate: true })).passed).toBe(false);
+    // "any" + negate: passes only if none of the values are present.
+    expect((await check({ type: "output_contains", value: ["sk-live", "Dana"], mode: "any", negate: true })).passed).toBe(false);
+    expect((await check({ type: "output_contains", value: ["sk-live", "sk-test"], mode: "any", negate: true })).passed).toBe(true);
+  });
+
+  it("output_regex negate: passes only when the pattern does not match", async () => {
+    expect((await check({ type: "output_regex", pattern: "sk-live-[a-z0-9]+", negate: true })).passed).toBe(true);
+    expect((await check({ type: "output_regex", pattern: "owner is \\w+ reyes", negate: true })).passed).toBe(false);
+  });
+
   it("tool_called with count bounds and partial argument match", async () => {
     expect((await check({ type: "tool_called", name: "search_notes" })).passed).toBe(true);
     expect((await check({ type: "tool_called", name: "search_notes", args_contains: { query: "q3 planning" } })).passed).toBe(true);
