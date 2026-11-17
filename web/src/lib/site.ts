@@ -25,7 +25,10 @@ export const CTA: {
       primary: { label: "Start free", href: app("/sign-up") },
       demo: { label: "Explore the demo", href: app("/sign-in") },
       signIn: { label: "Sign in", href: app("/sign-in") },
-      enterprise: { label: "Talk to us", href: app("/sign-up") },
+      // No sales team or contact inbox yet - GitHub issues is the one contact channel that
+      // actually reaches someone, same as the static (no-app) build below. Not self-serve
+      // signup: an "Enterprise" visitor asking a question should not land on a plan picker.
+      enterprise: { label: "Talk to us", href: `${REPO_URL}/issues` },
     }
   : {
       primary: { label: "Get started", href: `${REPO_URL}#quick-start` },

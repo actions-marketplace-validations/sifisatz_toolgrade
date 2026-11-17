@@ -21,6 +21,7 @@ const PILLARS = [
 export function Pillars() {
   return (
     <section className="border-y bg-muted/30">
+      <h2 className="sr-only">How ToolGrade works</h2>
       <div className="mx-auto grid max-w-6xl gap-px overflow-hidden px-6 md:grid-cols-3">
         {PILLARS.map(({ Icon, title, text }, i) => (
           <div

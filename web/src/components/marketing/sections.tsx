@@ -260,17 +260,42 @@ const PLANS = [
     cta: { label: "Read the quickstart", href: "#how-it-works" },
   },
   {
+    name: "Early Access",
+    price: "$29",
+    per: "per project / month",
+    text: "Hosted history for one project, while you're still proving it out.",
+    items: [
+      "1,000 evaluation units / month",
+      "90-day run history",
+      "Run history, trends and compare",
+    ],
+    cta: CTA.primary,
+  },
+  {
     name: "Team",
     price: "$49",
     per: "per project / month",
     text: "The hosted platform for teams shipping MCP servers.",
     items: [
-      "Run history and trends",
+      "2,500 evaluation units / month",
+      "365-day run history",
       "Trajectory viewer and compare",
-      "Workspaces, roles and API keys",
-      "Unlimited members",
+      "Roles and API keys",
     ],
     featured: true,
+    cta: CTA.primary,
+  },
+  {
+    name: "Growth",
+    price: "$99",
+    per: "per organization / month",
+    text: "One plan covering every project in the org, not just one.",
+    items: [
+      "Up to 5 projects, one subscription",
+      "5,000 evaluation units / month",
+      "365-day run history",
+      "Trajectory viewer and compare",
+    ],
     cta: CTA.primary,
   },
   {
@@ -289,9 +314,9 @@ export function Pricing() {
       <SectionHeading
         eyebrow="Pricing"
         title="Free to start, priced per tool surface"
-        text="Indicative pricing for the early-access programme. Nothing is billed during early access."
+        text="One evaluation unit is one task graded in both arms (with your tools, with none) for one trial. Usage beyond a plan's monthly allowance needs an upgrade before it's accepted."
       />
-      <div className="mt-12 grid gap-4 md:grid-cols-3">
+      <div className="mt-12 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {PLANS.map((p) => (
           <div
             key={p.name}
