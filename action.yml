@@ -1,5 +1,8 @@
 name: ToolGrade
 description: Eval-first quality gate for MCP servers - fails the build when your tools stop beating a no-tool baseline.
+branding:
+  icon: check-circle
+  color: green
 inputs:
   suite:
     description: Path to the suite YAML file
