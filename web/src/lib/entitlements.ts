@@ -13,6 +13,8 @@ export interface Entitlements {
   /** Present only when a paid subscription (not the free plan) granted this. */
   subscriptionId?: string;
   status?: string;
+  currentPeriodStart?: Date;
+  currentPeriodEnd?: Date;
 }
 
 const FREE: Entitlements = { plan: PLANS.free };
@@ -56,5 +58,7 @@ export async function getEntitlements(
     plan: PLANS[row.plan as PlanId],
     subscriptionId: row.id,
     status: row.status,
+    currentPeriodStart: row.currentPeriodStart ?? undefined,
+    currentPeriodEnd: row.currentPeriodEnd ?? undefined,
   };
 }

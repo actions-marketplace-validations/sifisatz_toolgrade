@@ -2,6 +2,7 @@ import { headers } from "next/headers";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
 import { ApiKeysPanel } from "@/components/api-keys-panel";
+import { BillingPanel } from "@/components/billing-panel";
 import { CodeBlock } from "@/components/copy-button";
 import { PageHeader } from "@/components/page-header";
 import {
@@ -12,7 +13,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
-import { getProject, listApiKeys } from "@/lib/data";
+import { getBillingSummary, getProject, listApiKeys } from "@/lib/data";
 import { MANAGE_ROLES, requireUser } from "@/lib/session";
 
 export const metadata = { title: "Settings & CI" };
@@ -40,6 +41,7 @@ async function Settings({
   const keys = MANAGE_ROLES.has(found.role)
     ? await listApiKeys(project.id)
     : [];
+  const billing = await getBillingSummary(org.id, project.id);
   const h = await headers();
   const origin = `${h.get("x-forwarded-proto") ?? "http"}://${h.get("host") ?? "localhost:3000"}`;
 
@@ -111,6 +113,29 @@ npx toolgrade run evals/suite.yaml --upload ${origin}`;
           <CardContent className="space-y-4">
             <CodeBlock label="GitHub Actions" code={workflow} />
             <CodeBlock label="Or from your terminal" code={local} />
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader>
+            <CardTitle>Billing</CardTitle>
+            <CardDescription>
+              The plan in effect for this project, and this billing period's
+              usage.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <BillingPanel
+              orgSlug={org.slug}
+              projectSlug={project.slug}
+              planId={billing.entitlements.plan.id}
+              status={billing.entitlements.status}
+              currentPeriodEnd={billing.entitlements.currentPeriodEnd}
+              usageUsed={billing.usage.used}
+              usageLimit={billing.usage.limit}
+              maxProjects={billing.entitlements.plan.maxProjects}
+              retentionDays={billing.entitlements.plan.retentionDays}
+              canManage={MANAGE_ROLES.has(found.role)}
+            />
           </CardContent>
         </Card>
       </div>
