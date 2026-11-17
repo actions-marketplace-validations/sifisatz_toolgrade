@@ -98,28 +98,4 @@ runs:
         TG_UPLOAD_URL: ${{ inputs.upload-url }}
         TG_VERSION: ${{ inputs.version }}
         TG_API_KEY_INPUT: ${{ inputs.toolgrade-api-key }}
-      run: |
-        # The caller's own TOOLGRADE_API_KEY (set as `env:` on the step that calls this action) is
-        # already inherited here; the input is just a more discoverable way to pass the same thing.
-        [ -n "$TG_API_KEY_INPUT" ] && export TOOLGRADE_API_KEY="$TG_API_KEY_INPUT"
-        args=(run "$TG_SUITE" --markdown .toolgrade/summary.md)
-        [ -n "$TG_TRIALS" ] && args+=(--trials "$TG_TRIALS")
-        [ -n "$TG_CONCURRENCY" ] && args+=(--concurrency "$TG_CONCURRENCY")
-        [ -n "$TG_FILTER" ] && args+=(--filter "$TG_FILTER")
-        [ "$TG_NO_BASELINE" = "true" ] && args+=(--no-baseline)
-        [ -n "$TG_COMPARE" ] && args+=(--compare "$TG_COMPARE")
-        [ -n "$TG_BASELINE" ] && args+=(--baseline "$TG_BASELINE")
-        [ -n "$TG_BASELINE_BRANCH" ] && args+=(--baseline-branch "$TG_BASELINE_BRANCH")
-        [ -n "$TG_MODEL" ] && args+=(--model "$TG_MODEL")
-        [ -n "$TG_JUDGE_MODEL" ] && args+=(--judge-model "$TG_JUDGE_MODEL")
-        [ -n "$TG_PROVIDER" ] && args+=(--provider "$TG_PROVIDER")
-        [ -n "$TG_BASE_URL" ] && args+=(--base-url "$TG_BASE_URL")
-        [ -n "$TG_API_KEY_ENV" ] && args+=(--api-key-env "$TG_API_KEY_ENV")
-        [ "$TG_LOCAL_MODEL" = "true" ] && args+=(--local-model)
-        [ -n "$TG_UPLOAD_URL" ] && args+=(--upload "$TG_UPLOAD_URL")
-        mkdir -p .toolgrade
-        set +e
-        npx --yes "toolgrade@$TG_VERSION" "${args[@]}"
-        code=$?
-        [ -f .toolgrade/summary.md ] && cat .toolgrade/summary.md >> "$GITHUB_STEP_SUMMARY"
-        exit $code
+      run: bash "$GITHUB_ACTION_PATH/action/entrypoint.sh"

@@ -181,6 +181,14 @@ inputs are defined in [action.yml](action.yml) (the `toolgrade/toolgrade` action
 placeholder until the package is published - until then, call the CLI directly with `npx
 toolgrade@latest run ...`).
 
+The action is a composite action (`action.yml` + [action/entrypoint.sh](action/entrypoint.sh)) that
+installs and runs the published CLI with `npx` - not a Docker action (no image to build, push or
+keep warm) and not a bundled JS action (no separate build/release process to keep in sync with the
+CLI's own). The entrypoint script is factored out of `action.yml` specifically so it has its own
+integration test ([test/action-entrypoint.test.ts](test/action-entrypoint.test.ts)) that exercises
+every input's argument mapping and the exit-code/step-summary handling against a fake CLI, without
+needing the npm registry, a real MCP server, or a GitHub Actions runner.
+
 **Quick start**
 
 ```yaml
