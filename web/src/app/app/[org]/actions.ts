@@ -1,6 +1,7 @@
 "use server";
 
 import { eq } from "drizzle-orm";
+import { refresh } from "next/cache";
 import { headers } from "next/headers";
 import { z } from "zod";
 import { getDb } from "@/db/client";
@@ -47,6 +48,7 @@ export async function removeOrgMember(
       body: { memberIdOrEmail, organizationId },
       headers: await headers(),
     });
+    refresh();
     return { ok: true };
   } catch (err) {
     return actionError(err, "Could not remove the member.");
@@ -68,6 +70,7 @@ export async function updateOrgMemberRole(
       body: { memberId, role, organizationId },
       headers: await headers(),
     });
+    refresh();
     return { ok: true };
   } catch (err) {
     return actionError(err, "Could not update the member's role.");
@@ -85,6 +88,7 @@ export async function leaveOrg(orgSlug: string): Promise<MemberActionState> {
       body: { organizationId },
       headers: await headers(),
     });
+    refresh();
     return { ok: true };
   } catch (err) {
     return actionError(err, "Could not leave the organization.");

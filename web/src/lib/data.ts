@@ -14,6 +14,7 @@ import { connection } from "next/server";
 import { cache } from "react";
 import { getDb } from "@/db/client";
 import { apiKeys, member, organization, projects, runs } from "@/db/schema";
+import { queryOrgMembers } from "@/lib/members";
 import {
   queryRunFilterOptions,
   queryRunsFiltered,
@@ -249,4 +250,11 @@ export async function getBillingSummary(orgId: string, projectId: string) {
     projectId,
   );
   return { entitlements, usage: { used, limit } };
+}
+
+/** Every member of an org, for the Members page. */
+export async function listOrgMembers(orgId: string) {
+  await connection();
+  const db = await getDb();
+  return queryOrgMembers(db, orgId);
 }
