@@ -1,4 +1,16 @@
-import { and, avg, count, desc, eq, gte, like, lt, lte, or, sql } from "drizzle-orm";
+import {
+  and,
+  avg,
+  count,
+  desc,
+  eq,
+  gte,
+  like,
+  lt,
+  lte,
+  or,
+  sql,
+} from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { runs } from "@/db/schema";
 

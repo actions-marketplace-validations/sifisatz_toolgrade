@@ -46,7 +46,9 @@ async function main() {
   }
 
   const funnelSet = new Set<string>(FUNNEL);
-  const otherNames = new Set(rows.map((r) => r.name).filter((n) => !funnelSet.has(n)));
+  const otherNames = new Set(
+    rows.map((r) => r.name).filter((n) => !funnelSet.has(n)),
+  );
   for (const name of otherNames) {
     const count = rows.filter((r) => r.name === name).length;
     console.log(`${name.padEnd(24)} ${String(count).padStart(5)}  (unlisted)`);

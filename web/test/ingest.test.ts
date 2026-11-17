@@ -4,7 +4,13 @@ import { loadSuite, runSuite, ScriptedProvider } from "toolgrade";
 import { beforeAll, describe, expect, it } from "vitest";
 import { POST } from "@/app/api/v1/runs/route";
 import { getDb } from "@/db/client";
-import { apiKeys, organization, productEvents, projects, runs } from "@/db/schema";
+import {
+  apiKeys,
+  organization,
+  productEvents,
+  projects,
+  runs,
+} from "@/db/schema";
 import { bearerToken, generateApiKey, hashApiKey } from "@/lib/api-keys";
 import { toRunRow, UploadSchema } from "@/lib/ingest";
 import { billableUnits } from "@/lib/usage";

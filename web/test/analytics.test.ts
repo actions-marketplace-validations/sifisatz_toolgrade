@@ -1,8 +1,8 @@
 import { eq } from "drizzle-orm";
 import { beforeAll, describe, expect, it } from "vitest";
-import { recordEvent } from "@/lib/analytics";
 import { getDb } from "@/db/client";
 import { organization, productEvents } from "@/db/schema";
+import { recordEvent } from "@/lib/analytics";
 
 describe("recordEvent", () => {
   let orgId: string;

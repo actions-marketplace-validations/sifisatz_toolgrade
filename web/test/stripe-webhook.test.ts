@@ -1,6 +1,6 @@
+import { eq } from "drizzle-orm";
 import Stripe from "stripe";
 import { beforeAll, describe, expect, it } from "vitest";
-import { eq } from "drizzle-orm";
 import { POST } from "@/app/api/stripe/webhook/route";
 import { getDb } from "@/db/client";
 import { organization, productEvents, subscriptions } from "@/db/schema";

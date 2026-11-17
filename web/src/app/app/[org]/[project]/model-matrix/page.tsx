@@ -11,6 +11,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { Skeleton } from "@/components/ui/skeleton";
 import {
   Table,
   TableBody,
@@ -19,7 +20,6 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { Skeleton } from "@/components/ui/skeleton";
 import { getProject, listModelMatrix } from "@/lib/data";
 import { dateTime, pct, usd } from "@/lib/format";
 import { requireUser } from "@/lib/session";
@@ -63,8 +63,8 @@ async function ModelMatrix({
       {rows.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center text-sm text-muted-foreground">
-            No runs yet - the matrix fills in once at least one model has a
-            run on record.
+            No runs yet - the matrix fills in once at least one model has a run
+            on record.
           </CardContent>
         </Card>
       ) : (
@@ -72,9 +72,9 @@ async function ModelMatrix({
           <CardHeader>
             <CardTitle>Models</CardTitle>
             <CardDescription>
-              {rows.length} model{rows.length === 1 ? "" : "s"} seen, newest
-              run first. Trend and averages cover every run on record, not
-              just the latest.
+              {rows.length} model{rows.length === 1 ? "" : "s"} seen, newest run
+              first. Trend and averages cover every run on record, not just the
+              latest.
             </CardDescription>
           </CardHeader>
           <CardContent className="px-2">
@@ -83,9 +83,7 @@ async function ModelMatrix({
                 <TableRow>
                   <TableHead>Model</TableHead>
                   <TableHead className="text-right">Runs</TableHead>
-                  <TableHead className="text-right">
-                    Latest pass rate
-                  </TableHead>
+                  <TableHead className="text-right">Latest pass rate</TableHead>
                   <TableHead className="text-right">Avg pass rate</TableHead>
                   <TableHead className="text-right">Latest lift</TableHead>
                   <TableHead>Latest gate</TableHead>
