@@ -7,7 +7,7 @@ import {
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
-import { compareRuns } from "toolgrade/core";
+import { compareRuns, type ToolSurfaceDiff } from "toolgrade/core";
 import { PageHeader } from "@/components/page-header";
 import { Lift, SignificanceBadge } from "@/components/status";
 import { Button } from "@/components/ui/button";
@@ -123,6 +123,9 @@ async function Compare({
       ) : (
         <div className="space-y-6">
           <Verdict verdict={cmp.verdict} />
+          {cmp.toolSurface.changed && (
+            <ToolSurfaceWarning diff={cmp.toolSurface} />
+          )}
           <div className="grid gap-3 sm:grid-cols-3">
             <Card className="gap-1 py-4">
               <CardContent className="px-4">
@@ -260,6 +263,46 @@ function RunSelect({
         ))}
       </select>
     </label>
+  );
+}
+
+function ToolSurfaceWarning({ diff }: { diff: ToolSurfaceDiff }) {
+  return (
+    <div className="flex items-start gap-3 rounded-xl border border-status-warning/30 bg-status-warning/10 p-4">
+      <CircleAlert
+        className="mt-0.5 size-5 shrink-0 text-status-warning"
+        aria-hidden
+      />
+      <div className="text-sm">
+        <div className="font-semibold">
+          Tool surface changed between these runs
+        </div>
+        <div className="mt-1 text-muted-foreground">
+          Any difference above may be explained by this, not by anything else
+          that changed.
+        </div>
+        <dl className="mt-2 space-y-1 font-mono text-xs">
+          {diff.added.length > 0 && (
+            <div>
+              <span className="text-status-good">added</span>{" "}
+              {diff.added.join(", ")}
+            </div>
+          )}
+          {diff.removed.length > 0 && (
+            <div>
+              <span className="text-status-critical">removed</span>{" "}
+              {diff.removed.join(", ")}
+            </div>
+          )}
+          {diff.changedTools.length > 0 && (
+            <div>
+              <span className="text-status-warning">changed</span>{" "}
+              {diff.changedTools.join(", ")}
+            </div>
+          )}
+        </dl>
+      </div>
+    </div>
   );
 }
 

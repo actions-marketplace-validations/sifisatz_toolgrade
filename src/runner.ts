@@ -1,6 +1,7 @@
 import { AgentRunError, runAgent, toAnthropicTools, type Trajectory, type Usage } from "./agent.js";
 import { evaluateAll, withTrialDir, type AssertionResult } from "./assertions.js";
 import { isOutcomeAssertion, isStdio, type AssertionSpec, type Suite, type TaskSpec } from "./config.js";
+import { fingerprintSurface, fingerprintTools, type ToolFingerprint } from "./fingerprint.js";
 import { todoTasks } from "./init.js";
 import { LlmJudge } from "./judge.js";
 import { openSession as defaultOpenSession, type McpSession } from "./mcp.js";
@@ -69,7 +70,16 @@ export interface RunReport {
   agentModel: string;
   judgeModel: string;
   trialsPerTask: number;
-  toolSurface: { count: number; names: string[]; schemaChars: number; approxTokens: number };
+  toolSurface: {
+    count: number;
+    names: string[];
+    schemaChars: number;
+    approxTokens: number;
+    /** Changes if any tool's name, description or schema changes, or a tool is added/removed. */
+    fingerprint: string;
+    /** Per-tool fingerprints, so a comparison can say exactly which tools changed. */
+    tools: ToolFingerprint[];
+  };
   tasks: TaskSummary[];
   overall: {
     tools: OverallArm;
@@ -239,7 +249,14 @@ export async function runSuite(suite: Suite, opts: RunOptions): Promise<RunRepor
     agentModel: suite.agent.model,
     judgeModel: suite.judge.model,
     trialsPerTask: trials,
-    toolSurface: { count: probe.tools.length, names: probe.tools.map((t) => t.name), schemaChars, approxTokens: Math.round(schemaChars / 4) },
+    toolSurface: {
+      count: probe.tools.length,
+      names: probe.tools.map((t) => t.name),
+      schemaChars,
+      approxTokens: Math.round(schemaChars / 4),
+      fingerprint: fingerprintSurface(probe.tools),
+      tools: fingerprintTools(probe.tools),
+    },
     tasks: taskSummaries,
     overall: {
       tools: overallTools,

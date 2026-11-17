@@ -104,6 +104,13 @@ const ReportSchema = z.object({
     names: z.array(Str(200)).max(10_000),
     schemaChars: Count,
     approxTokens: Count,
+    // Added later than the rest of this object (schema fingerprinting) - optional with a default
+    // so a report uploaded by an older CLI version still ingests.
+    fingerprint: Str(64).default(""),
+    tools: z
+      .array(z.object({ name: Str(200), hash: Str(64) }))
+      .max(10_000)
+      .default([]),
   }),
   tasks: z.array(Task).min(1).max(1000),
   overall: z.object({

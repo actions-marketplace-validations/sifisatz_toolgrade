@@ -16,7 +16,11 @@ export function formatTerminal(r: RunReport): string {
   lines.push("");
   lines.push(pc.bold(`ToolGrade - ${r.suite}`));
   if (r.provider === "scripted") lines.push(pc.yellow("SCRIPTED RUN - a script played the model; model names below are config only, no model was called"));
-  lines.push(pc.dim(`provider ${r.provider} | agent ${r.agentModel} | judge ${r.judgeModel} | ${r.trialsPerTask} trial(s)/task | ${r.toolSurface.count} tools (~${r.toolSurface.approxTokens} tokens of schema)`));
+  lines.push(
+    pc.dim(
+      `provider ${r.provider} | agent ${r.agentModel} | judge ${r.judgeModel} | ${r.trialsPerTask} trial(s)/task | ${r.toolSurface.count} tools (~${r.toolSurface.approxTokens} tokens of schema) | surface ${r.toolSurface.fingerprint}`,
+    ),
+  );
   lines.push("");
 
   const header = ["task", "with tools", "baseline", "lift", "calls", "cost"];
@@ -82,6 +86,14 @@ export function formatMarkdown(r: RunReport, cmp?: Comparison): string {
   if (cmp) {
     out.push("");
     out.push(`### Versus previous run: ${cmp.verdict.replaceAll("_", " ")}`);
+    if (cmp.toolSurface.changed) {
+      out.push("");
+      out.push("> **Tool surface changed since the previous run** - any difference below may be explained by that, not by anything else.");
+      if (cmp.toolSurface.added.length) out.push(`> - added: ${cmp.toolSurface.added.map((n) => `\`${n}\``).join(", ")}`);
+      if (cmp.toolSurface.removed.length) out.push(`> - removed: ${cmp.toolSurface.removed.map((n) => `\`${n}\``).join(", ")}`);
+      if (cmp.toolSurface.changedTools.length) out.push(`> - changed: ${cmp.toolSurface.changedTools.map((n) => `\`${n}\``).join(", ")}`);
+      out.push("");
+    }
     out.push(`Pass rate ${pct(cmp.overall.before)} -> ${pct(cmp.overall.after)} (${signedPct(cmp.overall.diff.delta)}, 95% CI ${ciDiff(cmp.overall.diff)}).`);
     const moved = cmp.tasks.filter((t) => t.significance !== "not_significant");
     for (const t of moved) out.push(`- \`${t.taskId}\`: ${pct(t.before)} -> ${pct(t.after)} (${t.significance})`);
@@ -93,6 +105,12 @@ export function formatMarkdown(r: RunReport, cmp?: Comparison): string {
 
 export function formatComparison(cmp: Comparison): string {
   const lines = [pc.bold(`Comparison: ${cmp.verdict.replaceAll("_", " ")}`)];
+  if (cmp.toolSurface.changed) {
+    lines.push(pc.yellow("tool surface changed since the previous run - treat this comparison with caution"));
+    if (cmp.toolSurface.added.length) lines.push(pc.yellow(`  added: ${cmp.toolSurface.added.join(", ")}`));
+    if (cmp.toolSurface.removed.length) lines.push(pc.yellow(`  removed: ${cmp.toolSurface.removed.join(", ")}`));
+    if (cmp.toolSurface.changedTools.length) lines.push(pc.yellow(`  changed: ${cmp.toolSurface.changedTools.join(", ")}`));
+  }
   lines.push(`overall over ${cmp.overall.tasks} matched tasks ${pct(cmp.overall.before)} -> ${pct(cmp.overall.after)}  ${signedPct(cmp.overall.diff.delta)}  95% CI ${ciDiff(cmp.overall.diff)}`);
   lines.push(pc.dim("per-task verdicts are Bonferroni-corrected"));
   for (const t of cmp.tasks) {

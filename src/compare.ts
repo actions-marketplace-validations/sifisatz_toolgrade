@@ -10,6 +10,15 @@ export interface TaskComparison {
   significance: Significance;
 }
 
+export interface ToolSurfaceDiff {
+  /** True whenever anything below is non-empty - a quick "don't trust this comparison blindly" flag. */
+  changed: boolean;
+  added: string[];
+  removed: string[];
+  /** Present in both runs, but the tool's description or input schema differs. */
+  changedTools: string[];
+}
+
 export interface Comparison {
   verdict: "regressed" | "improved" | "no_significant_change";
   /** Over matched tasks only, task-level (n = tasks), so different task sets never get mixed. */
@@ -17,6 +26,21 @@ export interface Comparison {
   tasks: TaskComparison[];
   /** Tasks present (and graded) in only one of the two runs; excluded from every number above. */
   unmatched: string[];
+  /** Whether the two runs even evaluated the same tool surface - a pass-rate change alongside a
+   * changed tool surface may be explained by the tools, not by anything else that differs between
+   * the runs (model, prompt, server logic). Never silently assumed to be comparable. */
+  toolSurface: ToolSurfaceDiff;
+}
+
+function diffToolSurface(before: RunReport, after: RunReport): ToolSurfaceDiff {
+  // Defensive: a report from before this field existed has no `tools` array at runtime even
+  // though the type says it must - treated as "unknown," not a crash.
+  const b = new Map((before.toolSurface.tools ?? []).map((t) => [t.name, t.hash]));
+  const a = new Map((after.toolSurface.tools ?? []).map((t) => [t.name, t.hash]));
+  const added = [...a.keys()].filter((name) => !b.has(name)).sort();
+  const removed = [...b.keys()].filter((name) => !a.has(name)).sort();
+  const changedTools = [...a.keys()].filter((name) => b.has(name) && b.get(name) !== a.get(name)).sort();
+  return { changed: added.length > 0 || removed.length > 0 || changedTools.length > 0, added, removed, changedTools };
 }
 
 export function compareRuns(before: RunReport, after: RunReport): Comparison {
@@ -47,5 +71,6 @@ export function compareRuns(before: RunReport, after: RunReport): Comparison {
     overall: { before: beforeRate.rate, after: afterRate.rate, tasks: matched.length, diff, significance: overallSig },
     tasks,
     unmatched,
+    toolSurface: diffToolSurface(before, after),
   };
 }

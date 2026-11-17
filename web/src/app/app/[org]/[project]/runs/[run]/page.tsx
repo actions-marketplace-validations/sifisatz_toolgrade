@@ -274,7 +274,17 @@ async function RunDetail({
 
         <Card>
           <CardHeader>
-            <CardTitle>Tool surface</CardTitle>
+            <CardTitle className="flex flex-wrap items-center gap-2">
+              Tool surface
+              {r.toolSurface.fingerprint && (
+                <span
+                  className="font-mono text-xs font-normal text-muted-foreground"
+                  title="A hash of every tool's name, description and schema - changes whenever any of those do, or a tool is added/removed."
+                >
+                  {r.toolSurface.fingerprint}
+                </span>
+              )}
+            </CardTitle>
             <CardDescription>
               {r.toolSurface.count} tool{r.toolSurface.count === 1 ? "" : "s"}{" "}
               exposed, ~{r.toolSurface.approxTokens} schema tokens. Being called

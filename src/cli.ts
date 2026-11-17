@@ -4,6 +4,7 @@ import { basename, dirname, join, relative, resolve } from "node:path";
 import { Command, InvalidArgumentError } from "commander";
 import { compareRuns } from "./compare.js";
 import { loadSuite } from "./config.js";
+import { fingerprintSurface } from "./fingerprint.js";
 import { generateSuite, type InitServer } from "./init.js";
 import { lintTools } from "./lint.js";
 import { openSession } from "./mcp.js";
@@ -114,6 +115,7 @@ program
       console.log("");
       const issues = lintTools(session.tools);
       console.log(formatLint(issues, session.tools.length));
+      console.log(`\nTool surface fingerprint: ${fingerprintSurface(session.tools)}`);
       if (issues.some((i) => i.level === "error")) process.exitCode = EXIT_GATE_FAILED;
     } finally {
       await session.close();
