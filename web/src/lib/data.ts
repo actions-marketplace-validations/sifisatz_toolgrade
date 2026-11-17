@@ -14,8 +14,7 @@ import { connection } from "next/server";
 import { cache } from "react";
 import { getDb } from "@/db/client";
 import { apiKeys, member, organization, projects, runs } from "@/db/schema";
-import { getEntitlements } from "@/lib/entitlements";
-import { currentCalendarMonth, getUsage } from "@/lib/usage";
+import { getUsageStatus } from "@/lib/usage";
 
 // Every read is request-time (connection()) and membership-scoped: orgs and projects are only
 // ever looked up through the signed-in user's member row. Project-level reads below
@@ -212,17 +211,10 @@ export async function listApiKeys(projectId: string) {
 export async function getBillingSummary(orgId: string, projectId: string) {
   await connection();
   const db = await getDb();
-  const entitlements = await getEntitlements(db, orgId, projectId);
-  const { since, until } =
-    entitlements.currentPeriodStart && entitlements.currentPeriodEnd
-      ? {
-          since: entitlements.currentPeriodStart,
-          until: entitlements.currentPeriodEnd,
-        }
-      : currentCalendarMonth();
-  const used = await getUsage(db, projectId, since, until);
-  return {
-    entitlements,
-    usage: { used, limit: entitlements.plan.monthlyEvaluationUnits },
-  };
+  const { entitlements, used, limit } = await getUsageStatus(
+    db,
+    orgId,
+    projectId,
+  );
+  return { entitlements, usage: { used, limit } };
 }

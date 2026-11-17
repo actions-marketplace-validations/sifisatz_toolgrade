@@ -7,6 +7,7 @@ import { getDb } from "@/db/client";
 import { apiKeys, organization, projects } from "@/db/schema";
 import { generateApiKey } from "@/lib/api-keys";
 import { notesAgent } from "../../examples/scripted-agent";
+import { giveActivePlan } from "./helpers";
 
 const SUITE = join(
   import.meta.dirname,
@@ -42,6 +43,7 @@ describe("GET /api/v1/runs/latest", () => {
       .insert(projects)
       .values({ orgId: org!.id, slug: "other", name: "Other" })
       .returning();
+    await giveActivePlan(db, org!.id, "team", project!.id);
     const live = generateApiKey();
     const other = generateApiKey();
     await db.insert(apiKeys).values([

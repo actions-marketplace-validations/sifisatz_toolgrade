@@ -15,6 +15,7 @@ import { apiKeys, organization, projects } from "@/db/schema";
 import { generateApiKey } from "@/lib/api-keys";
 import { MAX_UPLOAD_BYTES, UploadSchema } from "@/lib/ingest";
 import { notesAgent } from "../../examples/scripted-agent";
+import { giveActivePlan } from "./helpers";
 
 const SUITE = join(
   import.meta.dirname,
@@ -41,6 +42,7 @@ beforeAll(async () => {
     .insert(projects)
     .values({ orgId: org!.id, slug: "p", name: "P" })
     .returning();
+  await giveActivePlan(db, org!.id, "team", project!.id);
   const k = generateApiKey();
   await db.insert(apiKeys).values({
     projectId: project!.id,

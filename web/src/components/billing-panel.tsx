@@ -129,6 +129,20 @@ export function BillingPanel({
               style={{ width: `${usagePct}%` }}
             />
           </div>
+          {usageUsed >= usageLimit ? (
+            <p className="mt-1.5 text-xs text-status-critical">
+              Monthly allowance reached - new uploads will be rejected until it
+              renews{planId !== "free" ? " or you upgrade" : ""}.
+            </p>
+          ) : usagePct >= 90 ? (
+            <p className="mt-1.5 text-xs text-status-warning">
+              Nearly at your monthly allowance.
+            </p>
+          ) : usagePct >= 70 ? (
+            <p className="mt-1.5 text-xs text-muted-foreground">
+              Approaching your monthly allowance.
+            </p>
+          ) : null}
         </div>
       )}
 

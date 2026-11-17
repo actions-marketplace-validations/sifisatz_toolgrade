@@ -5,8 +5,14 @@ import { beforeAll, describe, expect, it } from "vitest";
 import { getDb } from "@/db/client";
 import { organization, projects, runs } from "@/db/schema";
 import { toRunRow, UploadSchema } from "@/lib/ingest";
-import { billableUnits, currentCalendarMonth, getUsage } from "@/lib/usage";
+import {
+  billableUnits,
+  currentCalendarMonth,
+  getUsage,
+  getUsageStatus,
+} from "@/lib/usage";
 import { notesAgent } from "../../examples/scripted-agent";
+import { giveActivePlan } from "./helpers";
 
 const SUITE = join(
   import.meta.dirname,
@@ -134,5 +140,49 @@ describe("getUsage", () => {
       new Date("2020-01-31"),
     );
     expect(total).toBe(0);
+  });
+});
+
+describe("getUsageStatus", () => {
+  it("uses the free plan's zero limit and the calendar month when there is no subscription", async () => {
+    const db = await getDb();
+    const [org] = await db
+      .insert(organization)
+      .values({ slug: "status-free", name: "Status Free" })
+      .returning();
+    const [project] = await db
+      .insert(projects)
+      .values({ orgId: org!.id, slug: "p", name: "P" })
+      .returning();
+    const status = await getUsageStatus(db, org!.id, project!.id);
+    expect(status).toMatchObject({ used: 0, limit: 0 });
+    expect(status.entitlements.plan.id).toBe("free");
+  });
+
+  it("uses the subscription's own billing period, not the calendar month, once one exists", async () => {
+    const db = await getDb();
+    const [org] = await db
+      .insert(organization)
+      .values({ slug: "status-paid", name: "Status Paid" })
+      .returning();
+    const [project] = await db
+      .insert(projects)
+      .values({ orgId: org!.id, slug: "p", name: "P" })
+      .returning();
+    await giveActivePlan(db, org!.id, "early_access", project!.id);
+
+    const report = await runSuite(await loadSuite(SUITE), {
+      provider: new ScriptedProvider(notesAgent),
+      trials: 1,
+    });
+    const row = toRunRow(project!.id, UploadSchema.parse({ report }));
+    // Outside the current calendar month, but inside the fake subscription's huge period (see helpers.ts).
+    await db
+      .insert(runs)
+      .values({ ...row, createdAt: new Date("2021-06-01T00:00:00Z") });
+
+    const status = await getUsageStatus(db, org!.id, project!.id);
+    expect(status.limit).toBe(1000);
+    expect(status.used).toBe(billableUnits(report));
   });
 });

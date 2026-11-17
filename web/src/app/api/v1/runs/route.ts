@@ -3,6 +3,7 @@ import { getDb } from "@/db/client";
 import { apiKeys, organization, projects, runs } from "@/db/schema";
 import { bearerToken, hashApiKey } from "@/lib/api-keys";
 import { hasNul, MAX_UPLOAD_BYTES, toRunRow, UploadSchema } from "@/lib/ingest";
+import { getUsageStatus } from "@/lib/usage";
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 const tooLarge = () =>
@@ -45,6 +46,7 @@ export async function POST(request: Request) {
     .select({
       id: apiKeys.id,
       projectId: apiKeys.projectId,
+      orgId: projects.orgId,
       projectSlug: projects.slug,
       orgSlug: organization.slug,
     })
@@ -54,6 +56,27 @@ export async function POST(request: Request) {
     .where(and(eq(apiKeys.hash, hashApiKey(token)), isNull(apiKeys.revokedAt)))
     .limit(1);
   if (!key) return json({ error: "invalid or revoked API key" }, 401);
+
+  // Checked before reading the body: an over-limit upload shouldn't make us buffer it either.
+  // Does not silently drop the report - the CLI surfaces this 402 and its message directly.
+  const { used, limit } = await getUsageStatus(db, key.orgId, key.projectId);
+  if (used >= limit) {
+    const billingUrl = new URL(
+      `/app/${key.orgSlug}/${key.projectSlug}/settings`,
+      request.url,
+    ).toString();
+    return json(
+      {
+        error:
+          limit === 0
+            ? "this project's plan has no hosted evaluation allowance - upgrade to upload reports"
+            : `this project has used its ${limit} evaluation units for this period`,
+        usage: { used, limit },
+        upgradeUrl: billingUrl,
+      },
+      402,
+    );
+  }
 
   if (Number(request.headers.get("content-length") ?? 0) > MAX_UPLOAD_BYTES)
     return tooLarge();

@@ -1,4 +1,5 @@
 import { join } from "node:path";
+import { eq } from "drizzle-orm";
 import { loadSuite, runSuite, ScriptedProvider } from "toolgrade";
 import { beforeAll, describe, expect, it } from "vitest";
 import { POST } from "@/app/api/v1/runs/route";
@@ -8,6 +9,7 @@ import { bearerToken, generateApiKey, hashApiKey } from "@/lib/api-keys";
 import { toRunRow, UploadSchema } from "@/lib/ingest";
 import { billableUnits } from "@/lib/usage";
 import { notesAgent } from "../../examples/scripted-agent";
+import { giveActivePlan } from "./helpers";
 
 const SUITE = join(
   import.meta.dirname,
@@ -85,6 +87,7 @@ describe("POST /api/v1/runs", () => {
       .values({ orgId: org!.id, slug: "p", name: "P" })
       .returning();
     projectId = project!.id;
+    await giveActivePlan(db, org!.id, "team", projectId);
     const live = generateApiKey();
     const dead = generateApiKey();
     await db.insert(apiKeys).values([
@@ -150,5 +153,113 @@ describe("POST /api/v1/runs", () => {
     expect(
       ((await res.json()) as { issues: unknown[] }).issues.length,
     ).toBeGreaterThan(0);
+  });
+});
+
+describe("POST /api/v1/runs - usage limits", () => {
+  const post = (token: string) =>
+    POST(
+      new Request("http://localhost:3000/api/v1/runs", {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ report }),
+      }),
+    );
+
+  it("rejects an upload on the free plan - it has no hosted allowance at all", async () => {
+    const db = await getDb();
+    const [org] = await db
+      .insert(organization)
+      .values({ slug: "free-limit", name: "Free Limit" })
+      .returning();
+    const [project] = await db
+      .insert(projects)
+      .values({ orgId: org!.id, slug: "p", name: "P" })
+      .returning();
+    const live = generateApiKey();
+    await db.insert(apiKeys).values({
+      projectId: project!.id,
+      name: "ci",
+      prefix: live.prefix,
+      hash: live.hash,
+    });
+
+    const res = await post(live.key);
+    expect(res.status).toBe(402);
+    const body = (await res.json()) as {
+      usage: { used: number; limit: number };
+      upgradeUrl: string;
+    };
+    expect(body.usage).toEqual({ used: 0, limit: 0 });
+    expect(body.upgradeUrl).toBe(
+      `http://localhost:3000/app/free-limit/p/settings`,
+    );
+    expect(
+      await db.select().from(runs).where(eq(runs.projectId, project!.id)),
+    ).toHaveLength(0);
+  });
+
+  it("rejects an upload once a paid plan's monthly allowance is already used up", async () => {
+    const db = await getDb();
+    const [org] = await db
+      .insert(organization)
+      .values({ slug: "paid-limit", name: "Paid Limit" })
+      .returning();
+    const [project] = await db
+      .insert(projects)
+      .values({ orgId: org!.id, slug: "p", name: "P" })
+      .returning();
+    await giveActivePlan(db, org!.id, "early_access", project!.id); // 1000 units/month
+    const live = generateApiKey();
+    await db.insert(apiKeys).values({
+      projectId: project!.id,
+      name: "ci",
+      prefix: live.prefix,
+      hash: live.hash,
+    });
+    // Simulate prior uploads this period already at the plan's allowance.
+    await db.insert(runs).values({
+      ...toRunRow(project!.id, UploadSchema.parse({ report })),
+      billableUnits: 1000,
+    });
+
+    const res = await post(live.key);
+    expect(res.status).toBe(402);
+    const body = (await res.json()) as {
+      usage: { used: number; limit: number };
+    };
+    expect(body.usage).toEqual({ used: 1000, limit: 1000 });
+    expect(
+      await db.select().from(runs).where(eq(runs.projectId, project!.id)),
+    ).toHaveLength(1); // the seeded one only
+  });
+
+  it("still accepts an upload that is under the allowance", async () => {
+    const db = await getDb();
+    const [org] = await db
+      .insert(organization)
+      .values({ slug: "under-limit", name: "Under Limit" })
+      .returning();
+    const [project] = await db
+      .insert(projects)
+      .values({ orgId: org!.id, slug: "p", name: "P" })
+      .returning();
+    await giveActivePlan(db, org!.id, "early_access", project!.id);
+    const live = generateApiKey();
+    await db.insert(apiKeys).values({
+      projectId: project!.id,
+      name: "ci",
+      prefix: live.prefix,
+      hash: live.hash,
+    });
+    await db.insert(runs).values({
+      ...toRunRow(project!.id, UploadSchema.parse({ report })),
+      billableUnits: 999,
+    });
+
+    expect((await post(live.key)).status).toBe(201);
   });
 });
