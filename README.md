@@ -177,9 +177,8 @@ end-to-end tests run against the real example server with no API key.
 ## CI
 
 A full example is at [examples/github-workflow.yml](examples/github-workflow.yml); the action's
-inputs are defined in [action.yml](action.yml) (the `toolgrade/toolgrade` action reference is a
-placeholder until the package is published - until then, call the CLI directly with `npx
-toolgrade@latest run ...`).
+inputs are defined in [action.yml](action.yml). Both the `toolgrade` CLI (`npx toolgrade@latest
+run ...`) and the `toolgrade/toolgrade@v0` action reference in the example are live.
 
 The action is a composite action (`action.yml` + [action/entrypoint.sh](action/entrypoint.sh)) that
 installs and runs the published CLI with `npx` - not a Docker action (no image to build, push or
