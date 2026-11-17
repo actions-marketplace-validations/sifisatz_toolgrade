@@ -7,6 +7,7 @@ import { z } from "zod";
 import { getDb } from "@/db/client";
 import { organization } from "@/db/schema";
 import { getAuth } from "@/lib/auth";
+import { cancelSubscriptionsFor } from "@/lib/billing";
 
 // Authorization for all three actions below lives in Better Auth's organization plugin itself
 // (auth.api.removeMember/updateMemberRole/leaveOrganization), not here: it already checks the
@@ -124,6 +125,47 @@ export async function cancelInvitation(
     return { ok: true };
   } catch (err) {
     return actionError(err, "Could not cancel the invitation.");
+  }
+}
+
+/**
+ * Permanently deletes an org and everything under it (projects, keys, runs - the database cascade
+ * does the rest) - owners only (enforced by the organization plugin; admins cannot). Requires
+ * typing the org's slug to confirm, checked here too, not just in the form, since this is
+ * irreversible. Cancels any live Stripe subscription first: once the org's gone, so is the only
+ * record of which subscription was ever its own.
+ */
+export async function deleteOrg(
+  orgSlug: string,
+  confirmSlug: string,
+): Promise<MemberActionState> {
+  if (confirmSlug !== orgSlug)
+    return {
+      ok: false,
+      error: "Type the organization's slug exactly to confirm.",
+    };
+  const organizationId = await orgIdForSlug(orgSlug);
+  if (!organizationId) return { ok: false, error: "Organization not found." };
+
+  const db = await getDb();
+  try {
+    await cancelSubscriptionsFor(db, { organizationId });
+  } catch (err) {
+    return actionError(
+      err,
+      "Could not cancel this organization's billing - try again before deleting it.",
+    );
+  }
+
+  const auth = await getAuth();
+  try {
+    await auth.api.deleteOrganization({
+      body: { organizationId },
+      headers: await headers(),
+    });
+    return { ok: true };
+  } catch (err) {
+    return actionError(err, "Could not delete the organization.");
   }
 }
 

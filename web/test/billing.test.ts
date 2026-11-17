@@ -1,15 +1,21 @@
 import type Stripe from "stripe";
-import { beforeAll, describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it, vi } from "vitest";
 import { getDb } from "@/db/client";
 import { organization, projects, subscriptions } from "@/db/schema";
 import {
+  cancelSubscriptionsFor,
   createCheckoutSession,
   createPortalSession,
   upsertFromSubscription,
 } from "@/lib/billing";
+import { giveActivePlan } from "./helpers";
 
 function fakeStripe(
-  overrides: Partial<{ checkoutCreate: unknown; portalCreate: unknown }> = {},
+  overrides: Partial<{
+    checkoutCreate: unknown;
+    portalCreate: unknown;
+    subscriptionsCancel: unknown;
+  }> = {},
 ): Stripe {
   return {
     checkout: {
@@ -25,6 +31,9 @@ function fakeStripe(
           overrides.portalCreate ??
           (async () => ({ url: "https://billing.stripe.com/test" })),
       },
+    },
+    subscriptions: {
+      cancel: overrides.subscriptionsCancel ?? (async () => ({})),
     },
   } as unknown as Stripe;
 }
@@ -265,5 +274,78 @@ describe("upsertFromSubscription", () => {
       (r) => r.providerSubscriptionId === "sub_with_project",
     );
     expect(row?.projectId).toBe(project!.id);
+  });
+});
+
+describe("cancelSubscriptionsFor", () => {
+  it("does nothing when the org has no subscriptions to cancel", async () => {
+    const db = await getDb();
+    const [org] = await db
+      .insert(organization)
+      .values({ slug: "cancel-none", name: "Cancel None" })
+      .returning();
+    await expect(
+      cancelSubscriptionsFor(db, { organizationId: org!.id }),
+    ).resolves.toBeUndefined();
+  });
+
+  it("cancels every active subscription recorded for an org", async () => {
+    const db = await getDb();
+    const [org] = await db
+      .insert(organization)
+      .values({ slug: "cancel-org", name: "Cancel Org" })
+      .returning();
+    await giveActivePlan(db, org!.id, "growth");
+    const cancel = vi.fn(async () => ({}));
+    await cancelSubscriptionsFor(
+      db,
+      { organizationId: org!.id },
+      fakeStripe({ subscriptionsCancel: cancel }),
+    );
+    expect(cancel).toHaveBeenCalledWith(`sub_test_${org!.id}_org`);
+  });
+
+  it("only cancels the given project's subscription, not its org's other ones", async () => {
+    const db = await getDb();
+    const [org] = await db
+      .insert(organization)
+      .values({ slug: "cancel-scope", name: "Cancel Scope" })
+      .returning();
+    const [project] = await db
+      .insert(projects)
+      .values({ orgId: org!.id, slug: "p", name: "P" })
+      .returning();
+    await giveActivePlan(db, org!.id, "team", project!.id);
+    await giveActivePlan(db, org!.id, "growth"); // org-scoped, no projectId
+    const cancel = vi.fn(async () => ({}));
+    await cancelSubscriptionsFor(
+      db,
+      { projectId: project!.id },
+      fakeStripe({ subscriptionsCancel: cancel }),
+    );
+    expect(cancel).toHaveBeenCalledTimes(1);
+    expect(cancel).toHaveBeenCalledWith(`sub_test_${org!.id}_${project!.id}`);
+  });
+
+  it("does not re-cancel a subscription that is already canceled", async () => {
+    const db = await getDb();
+    const [org] = await db
+      .insert(organization)
+      .values({ slug: "cancel-already", name: "Cancel Already" })
+      .returning();
+    await db.insert(subscriptions).values({
+      organizationId: org!.id,
+      provider: "stripe",
+      providerSubscriptionId: "sub_already_canceled",
+      plan: "team",
+      status: "canceled",
+    });
+    const cancel = vi.fn(async () => ({}));
+    await cancelSubscriptionsFor(
+      db,
+      { organizationId: org!.id },
+      fakeStripe({ subscriptionsCancel: cancel }),
+    );
+    expect(cancel).not.toHaveBeenCalled();
   });
 });

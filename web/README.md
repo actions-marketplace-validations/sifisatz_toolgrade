@@ -76,6 +76,12 @@ node dist/cli.js upload .toolgrade/runs/latest.json --url http://localhost:3100 
   inviter gets a shareable `/accept-invite/<id>` link back instead; accepting it still requires a
   session whose email matches the invite exactly. A brand-new invitee who doesn't have an account
   is routed through sign-up and back to the invite (not the normal onboarding flow) via `next`.
+- Project deletion (owner/admin, from the project's Settings page) and org deletion (owner only,
+  from the org's Settings page) both require typing the project's/org's slug to confirm, checked
+  server-side too. The database cascade (`onDelete: "cascade"` from projects/api_keys/runs/
+  subscriptions up to organization) does the actual cleanup; the action's own job is cancelling any
+  live Stripe subscription first, in `lib/billing.ts`'s `cancelSubscriptionsFor` - once the row is
+  gone there is no record of which subscription was ever its own.
 
 ## Deployment
 

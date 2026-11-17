@@ -1,4 +1,4 @@
-import { BookOpen, LayoutGrid, Users } from "lucide-react";
+import { BookOpen, LayoutGrid, Settings, Users } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -137,6 +137,12 @@ async function ProjectNav({ params }: { params: Promise<{ org: string }> }) {
             <NavLink href={`${base}/members`} exact>
               <Users />
               <span>Members</span>
+            </NavLink>
+          </SidebarMenuItem>
+          <SidebarMenuItem>
+            <NavLink href={`${base}/settings`} exact>
+              <Settings />
+              <span>Settings</span>
             </NavLink>
           </SidebarMenuItem>
         </SidebarMenu>

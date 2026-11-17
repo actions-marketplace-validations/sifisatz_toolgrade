@@ -1,9 +1,10 @@
 import "server-only";
+import { and, eq, isNotNull, ne } from "drizzle-orm";
 import type Stripe from "stripe";
 import type { Db } from "@/db/client";
 import { subscriptions } from "@/db/schema";
 import { PLANS, type PlanId } from "@/lib/plans";
-import { planForPriceId, priceIdForPlan } from "@/lib/stripe";
+import { getStripe, planForPriceId, priceIdForPlan } from "@/lib/stripe";
 
 export interface CheckoutArgs {
   organizationId: string;
@@ -116,4 +117,37 @@ export async function upsertFromSubscription(
         updatedAt: new Date(),
       },
     });
+}
+
+/**
+ * Immediately cancels every not-already-canceled Stripe subscription recorded for an org or a
+ * project, so deleting it (org/project deletion cascades to the subscriptions table) never leaves
+ * someone being billed for a workspace that no longer exists to manage it from. Only constructs a
+ * Stripe client if there is actually something to cancel - most orgs are on the free plan and have
+ * never touched Stripe, and this runs in every environment, including local dev with no Stripe
+ * keys configured. `stripeOverride` exists only for tests, so this doesn't need a real Stripe
+ * client to verify the "nothing to cancel" and "which rows get cancelled" behaviour.
+ */
+export async function cancelSubscriptionsFor(
+  db: Db,
+  where: { organizationId: string } | { projectId: string },
+  stripeOverride?: Stripe,
+): Promise<void> {
+  const scope =
+    "organizationId" in where
+      ? eq(subscriptions.organizationId, where.organizationId)
+      : eq(subscriptions.projectId, where.projectId);
+  const rows = await db
+    .select({ id: subscriptions.providerSubscriptionId })
+    .from(subscriptions)
+    .where(
+      and(
+        scope,
+        ne(subscriptions.status, "canceled"),
+        isNotNull(subscriptions.providerSubscriptionId),
+      ),
+    );
+  if (rows.length === 0) return;
+  const stripe = stripeOverride ?? getStripe();
+  for (const row of rows) await stripe.subscriptions.cancel(row.id!);
 }

@@ -4,6 +4,7 @@ import { Suspense } from "react";
 import { ApiKeysPanel } from "@/components/api-keys-panel";
 import { BillingPanel } from "@/components/billing-panel";
 import { CodeBlock } from "@/components/copy-button";
+import { DeleteProjectSection } from "@/components/delete-project-section";
 import { PageHeader } from "@/components/page-header";
 import {
   Card,
@@ -138,6 +139,9 @@ npx toolgrade run evals/suite.yaml --upload ${origin}`;
             />
           </CardContent>
         </Card>
+        {MANAGE_ROLES.has(found.role) && (
+          <DeleteProjectSection orgSlug={org.slug} projectSlug={project.slug} />
+        )}
       </div>
     </>
   );

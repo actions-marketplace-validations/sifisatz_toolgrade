@@ -13,7 +13,11 @@ import {
 } from "@/db/schema";
 import { recordEvent } from "@/lib/analytics";
 import { generateApiKey } from "@/lib/api-keys";
-import { createCheckoutSession, createPortalSession } from "@/lib/billing";
+import {
+  cancelSubscriptionsFor,
+  createCheckoutSession,
+  createPortalSession,
+} from "@/lib/billing";
 import { isPlanId, PLANS } from "@/lib/plans";
 import { getSession, MANAGE_ROLES } from "@/lib/session";
 import { getStripe } from "@/lib/stripe";
@@ -227,5 +231,39 @@ export async function revokeApiKey(
   if (revoked.length === 0)
     return { ok: false, error: "Key not found or already revoked." };
   refresh();
+  return { ok: true };
+}
+
+/**
+ * Permanently deletes a project and everything under it (keys, runs - the database cascade does
+ * the rest) - owner or admin only. Requires typing the project's slug to confirm, checked here
+ * too, since this is irreversible. Cancels any live project-scoped Stripe subscription first: once
+ * the project's gone, so is the only record of which subscription was ever its own.
+ */
+export async function deleteProject(
+  orgSlug: string,
+  projectSlug: string,
+  confirmSlug: string,
+): Promise<{ ok: boolean; error?: string }> {
+  if (confirmSlug !== projectSlug)
+    return { ok: false, error: "Type the project's slug exactly to confirm." };
+  const project = await findManagedProject(orgSlug, projectSlug);
+  if (!project)
+    return { ok: false, error: "Project not found, or you cannot manage it." };
+
+  const db = await getDb();
+  try {
+    await cancelSubscriptionsFor(db, { projectId: project.id });
+  } catch (err) {
+    return {
+      ok: false,
+      error:
+        err instanceof Error
+          ? err.message
+          : "Could not cancel this project's billing - try again before deleting it.",
+    };
+  }
+
+  await db.delete(projects).where(eq(projects.id, project.id));
   return { ok: true };
 }
