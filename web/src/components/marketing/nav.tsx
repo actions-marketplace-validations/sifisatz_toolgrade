@@ -19,7 +19,7 @@ const LINKS = [
   { href: "/#product", label: "Product" },
   { href: "/#how-it-works", label: "How it works" },
   { href: "/benchmark", label: "Benchmark" },
-  { href: "/docs", label: "Docs" },
+  { href: CTA.docs.href, label: CTA.docs.label },
   { href: "/#pricing", label: "Pricing" },
 ];
 

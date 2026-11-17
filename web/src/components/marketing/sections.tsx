@@ -459,6 +459,7 @@ export function Footer() {
     {
       title: "Learn",
       links: [
+        [CTA.docs.label, CTA.docs.href],
         ["Benchmark", "/benchmark"],
         ["Methodology", "/#methodology"],
         ["FAQ", "/#faq"],

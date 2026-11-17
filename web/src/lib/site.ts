@@ -21,6 +21,7 @@ export const CTA: {
   signIn: Link;
   enterprise: Link;
   designPartners: Link;
+  docs: Link;
 } = hasApp
   ? {
       primary: { label: "Start free", href: app("/sign-up") },
@@ -36,6 +37,10 @@ export const CTA: {
         label: "Design partners",
         href: app("/design-partners"),
       },
+      // /docs reads Markdown straight off disk (no DB, no session) and could in principle be
+      // statically exported too, but it has no .marketing.tsx twin yet either - same reasoning
+      // as designPartners, just not for the same cause.
+      docs: { label: "Docs", href: app("/docs") },
     }
   : {
       primary: { label: "Get started", href: `${REPO_URL}#quick-start` },
@@ -47,4 +52,6 @@ export const CTA: {
       enterprise: { label: "Open an issue", href: `${REPO_URL}/issues` },
       // No hosted app to send a static-site visitor to - same GitHub issues fallback as enterprise.
       designPartners: { label: "Design partners", href: `${REPO_URL}/issues` },
+      // Same reasoning: no hosted app to read /docs from, so point at the source Markdown instead.
+      docs: { label: "Docs", href: `${REPO_URL}/tree/main/docs` },
     };
