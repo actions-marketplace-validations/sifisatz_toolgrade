@@ -82,7 +82,9 @@ benchmark/container/tg.sh down                   # stop the containers and the m
 ```
 
 Podman on macOS runs one machine at a time, so `up` refuses to start while another machine is
-running. On a Mac the model runs on CPU inside the VM (the official arm64 Ollama image has no
+running. If a machine then fails to start again with a `gvproxy` socket error, or its published
+ports report "address already in use", a `gvproxy` from its previous session is still alive
+(`ps -axo pid,etime,command | grep gvproxy`); stop that exact PID and start the machine again. On a Mac the model runs on CPU inside the VM (the official arm64 Ollama image has no
 Vulkan backend); `qwen3:8b` generates ~28 tokens/s on 8 cores.
 
 Without containers: `ollama serve`, then `benchmark/run.sh openai qwen3:8b` on the host. With a
