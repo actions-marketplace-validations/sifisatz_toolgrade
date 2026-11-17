@@ -157,6 +157,11 @@ async function ProjectNav({ params }: { params: Promise<{ org: string }> }) {
                 </NavLink>
                 <SidebarMenuSub>
                   <SidebarMenuSubItem>
+                    <NavLink sub href={`${base}/${p.slug}/runs`}>
+                      Run history
+                    </NavLink>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
                     <NavLink sub href={`${base}/${p.slug}/compare`}>
                       Compare runs
                     </NavLink>

@@ -1,4 +1,4 @@
-import { GitCompareArrows, Settings, Terminal } from "lucide-react";
+import { Filter, GitCompareArrows, Settings, Terminal } from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -171,13 +171,22 @@ async function Project({
           </Card>
 
           <Card className="gap-2 pb-2">
-            <CardHeader>
-              <CardTitle>Runs</CardTitle>
-              <CardDescription>
-                {totalRuns > runs.length
-                  ? `Showing the latest ${runs.length} of ${totalRuns} runs, newest first.`
-                  : "Every run for this project, newest first."}
-              </CardDescription>
+            <CardHeader className="flex flex-wrap items-end justify-between gap-2">
+              <div>
+                <CardTitle>Runs</CardTitle>
+                <CardDescription className="mt-1">
+                  {totalRuns > runs.length
+                    ? `Showing the latest ${runs.length} of ${totalRuns} runs, newest first.`
+                    : "Every run for this project, newest first."}
+                </CardDescription>
+              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                render={<Link href={`${base}/runs`} />}
+              >
+                <Filter /> Filter & browse all
+              </Button>
             </CardHeader>
             <CardContent className="px-2">
               <RunsTable runs={runs} base={base} />

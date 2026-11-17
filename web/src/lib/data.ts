@@ -14,12 +14,20 @@ import { connection } from "next/server";
 import { cache } from "react";
 import { getDb } from "@/db/client";
 import { apiKeys, member, organization, projects, runs } from "@/db/schema";
+import {
+  queryRunFilterOptions,
+  queryRunsFiltered,
+  type RunCursor,
+  type RunFilters,
+} from "@/lib/run-history";
 import { getUsageStatus } from "@/lib/usage";
 
 // Every read is request-time (connection()) and membership-scoped: orgs and projects are only
 // ever looked up through the signed-in user's member row. Project-level reads below
 // (listProjects, listRuns, getRun, ...) take ids that came out of those checked lookups.
 // cache() de-duplicates identical lookups within one request (layout and page both ask).
+
+export type { RunCursor, RunFilters } from "@/lib/run-history";
 
 const TREND_POINTS = 20;
 
@@ -164,6 +172,30 @@ export async function listRuns(projectId: string, limit = 100) {
     db.select({ n: count() }).from(runs).where(eq(runs.projectId, projectId)),
   ]);
   return { rows, total: totalRow?.n ?? rows.length };
+}
+
+/**
+ * Filtered, cursor-paginated run history for the dedicated /runs page - unlike listRuns (the
+ * project overview's quick "latest 100" glance), this never silently caps at a fixed count: it
+ * fetches one page at a time and says whether there's another. The actual query logic lives in
+ * run-history.ts as a plain function, so it's testable without a request context for connection().
+ */
+export async function listRunsFiltered(
+  projectId: string,
+  filters: RunFilters,
+  cursor?: RunCursor,
+  pageSize = 50,
+) {
+  await connection();
+  const db = await getDb();
+  return queryRunsFiltered(db, projectId, filters, cursor, pageSize);
+}
+
+/** Distinct values seen for this project, to populate the run-history filter selects. */
+export async function listRunFilterOptions(projectId: string) {
+  await connection();
+  const db = await getDb();
+  return queryRunFilterOptions(db, projectId);
 }
 
 export async function getRun(projectId: string, runId: string) {
