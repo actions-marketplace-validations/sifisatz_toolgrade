@@ -173,6 +173,11 @@ async function ProjectNav({ params }: { params: Promise<{ org: string }> }) {
                     </NavLink>
                   </SidebarMenuSubItem>
                   <SidebarMenuSubItem>
+                    <NavLink sub href={`${base}/${p.slug}/model-matrix`}>
+                      Model matrix
+                    </NavLink>
+                  </SidebarMenuSubItem>
+                  <SidebarMenuSubItem>
                     <NavLink sub href={`${base}/${p.slug}/settings`}>
                       Settings & CI
                     </NavLink>

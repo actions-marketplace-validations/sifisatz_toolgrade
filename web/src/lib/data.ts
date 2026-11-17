@@ -16,6 +16,7 @@ import { getDb } from "@/db/client";
 import { apiKeys, member, organization, projects, runs } from "@/db/schema";
 import { queryOrgMembers } from "@/lib/members";
 import {
+  queryModelMatrix,
   queryRunFilterOptions,
   queryRunsFiltered,
   type RunCursor,
@@ -190,6 +191,13 @@ export async function listRunsFiltered(
   await connection();
   const db = await getDb();
   return queryRunsFiltered(db, projectId, filters, cursor, pageSize);
+}
+
+/** One row per agentModel this project has run, for comparing models on the same suite. */
+export async function listModelMatrix(projectId: string) {
+  await connection();
+  const db = await getDb();
+  return queryModelMatrix(db, projectId);
 }
 
 /** Distinct values seen for this project, to populate the run-history filter selects. */

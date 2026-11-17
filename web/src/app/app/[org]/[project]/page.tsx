@@ -1,4 +1,10 @@
-import { Filter, GitCompareArrows, Settings, Terminal } from "lucide-react";
+import {
+  Filter,
+  GitCompareArrows,
+  Rows3,
+  Settings,
+  Terminal,
+} from "lucide-react";
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { Suspense } from "react";
@@ -58,6 +64,13 @@ async function Project({
         render={<Link href={`${base}/compare`} />}
       >
         <GitCompareArrows /> Compare runs
+      </Button>
+      <Button
+        variant="outline"
+        size="sm"
+        render={<Link href={`${base}/model-matrix`} />}
+      >
+        <Rows3 /> Model matrix
       </Button>
       <Button
         variant="outline"

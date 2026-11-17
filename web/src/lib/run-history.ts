@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, like, lt, lte, or } from "drizzle-orm";
+import { and, avg, count, desc, eq, gte, like, lt, lte, or, sql } from "drizzle-orm";
 import type { Db } from "@/db/client";
 import { runs } from "@/db/schema";
 
@@ -97,6 +97,77 @@ export async function queryRunsFiltered(
     nextCursor:
       hasMore && last ? { createdAt: last.createdAt, id: last.id } : undefined,
   };
+}
+
+export type RunSummaryRow = Awaited<
+  ReturnType<typeof queryRunsFiltered>
+>["rows"][number];
+
+export interface ModelMatrixRow {
+  agentModel: string;
+  runCount: number;
+  avgPassRate: number;
+  avgCostUsd: number | null;
+  latest: RunSummaryRow;
+  /** Oldest to newest pass rate, for a per-model sparkline. */
+  trend: number[];
+}
+
+/**
+ * One row per agentModel this project has ever run, for comparing models on the same suite:
+ * how many runs, the latest run's full summary, a recent pass-rate trend, and averages across
+ * every run on record (not just the trend window). Newest-latest-run-first.
+ */
+export async function queryModelMatrix(
+  db: Db,
+  projectId: string,
+  trendPoints = 20,
+): Promise<ModelMatrixRow[]> {
+  const stats = await db
+    .select({
+      agentModel: runs.agentModel,
+      n: count(),
+      avgPassRate: avg(runs.passRate),
+      avgCostUsd: avg(runs.totalCostUsd),
+    })
+    .from(runs)
+    .where(eq(runs.projectId, projectId))
+    .groupBy(runs.agentModel);
+  if (stats.length === 0) return [];
+
+  const ranked = db.$with("ranked").as(
+    db
+      .select({
+        ...runSummaryColumns,
+        rn: sql<number>`row_number() over (partition by ${runs.agentModel} order by ${runs.createdAt} desc)`.as(
+          "rn",
+        ),
+      })
+      .from(runs)
+      .where(eq(runs.projectId, projectId)),
+  );
+  const recent = await db
+    .with(ranked)
+    .select()
+    .from(ranked)
+    .where(lte(ranked.rn, trendPoints))
+    .orderBy(desc(ranked.createdAt));
+
+  return stats
+    .map((s): ModelMatrixRow => {
+      const mine = recent.filter((r) => r.agentModel === s.agentModel);
+      return {
+        agentModel: s.agentModel,
+        runCount: Number(s.n),
+        avgPassRate: Number(s.avgPassRate),
+        avgCostUsd: s.avgCostUsd === null ? null : Number(s.avgCostUsd),
+        latest: mine[0]!,
+        trend: mine.map((r) => r.passRate).reverse(),
+      };
+    })
+    .sort(
+      (a, b) => b.latest.createdAt.getTime() - a.latest.createdAt.getTime(),
+    );
 }
 
 /** Distinct values seen for this project, to populate the run-history filter selects. */

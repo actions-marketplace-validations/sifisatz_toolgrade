@@ -5,6 +5,7 @@ import { getDb } from "@/db/client";
 import { organization, projects, runs } from "@/db/schema";
 import { toRunRow, UploadSchema } from "@/lib/ingest";
 import {
+  queryModelMatrix,
   queryRunFilterOptions,
   queryRunsFiltered,
   type RunCursor,
@@ -177,5 +178,65 @@ describe("queryRunsFiltered / queryRunFilterOptions", () => {
     expect(options.suites.sort()).toEqual(["suite-a", "suite-b"]);
     expect(options.providers.sort()).toEqual(["anthropic", "openai"]);
     expect(options.branches.sort()).toEqual(["feat/x", "main"]);
+  });
+});
+
+describe("queryModelMatrix", () => {
+  let projectId: string;
+
+  beforeAll(async () => {
+    const db = await getDb();
+    const [org] = await db
+      .insert(organization)
+      .values({ slug: "model-matrix", name: "Model Matrix" })
+      .returning();
+    const [project] = await db
+      .insert(projects)
+      .values({ orgId: org!.id, slug: "p", name: "P" })
+      .returning();
+    projectId = project!.id;
+
+    await seedRun(projectId, {
+      agentModel: "claude-opus-5",
+      passRate: 0.8,
+      totalCostUsd: 1.5,
+      gatePassed: true,
+      createdAt: new Date("2026-01-01"),
+    });
+    await seedRun(projectId, {
+      agentModel: "claude-opus-5",
+      passRate: 0.9,
+      totalCostUsd: 2.5,
+      gatePassed: true,
+      createdAt: new Date("2026-01-03"),
+    });
+    await seedRun(projectId, {
+      agentModel: "gpt-5",
+      passRate: 0.6,
+      totalCostUsd: 0.5,
+      gatePassed: false,
+      createdAt: new Date("2026-01-02"),
+    });
+  });
+
+  it("groups runs by model, newest latest-run first", async () => {
+    const db = await getDb();
+    const rows = await queryModelMatrix(db, projectId);
+    expect(rows.map((r) => r.agentModel)).toEqual(["claude-opus-5", "gpt-5"]);
+  });
+
+  it("reports run count, latest run and averages per model", async () => {
+    const db = await getDb();
+    const rows = await queryModelMatrix(db, projectId);
+    const opus = rows.find((r) => r.agentModel === "claude-opus-5")!;
+    expect(opus.runCount).toBe(2);
+    expect(opus.latest.passRate).toBe(0.9);
+    expect(opus.avgPassRate).toBeCloseTo(0.85);
+    expect(opus.avgCostUsd).toBeCloseTo(2.0);
+    expect(opus.trend).toEqual([0.8, 0.9]);
+
+    const gpt = rows.find((r) => r.agentModel === "gpt-5")!;
+    expect(gpt.runCount).toBe(1);
+    expect(gpt.latest.gatePassed).toBe(false);
   });
 });
