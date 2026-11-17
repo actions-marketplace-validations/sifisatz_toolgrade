@@ -192,8 +192,38 @@ export const runs = pgTable(
   (t) => [index().on(t.projectId, t.createdAt)],
 );
 
+/**
+ * A paid plan on an org (Growth) or a single project within it (Early Access, Team) - see
+ * lib/entitlements.ts for what each plan actually grants. No row means the free plan: there is
+ * nothing to bill and nothing hosted to entitle (local CLI only).
+ */
+export const subscriptions = pgTable(
+  "subscriptions",
+  {
+    id: id(),
+    organizationId: uuid()
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    /** Null for an org-level plan (Growth); set for a project-level plan (Early Access, Team). */
+    projectId: uuid().references(() => projects.id, { onDelete: "cascade" }),
+    /** Billing provider, e.g. "stripe" - a field now so adding a second provider isn't a migration. */
+    provider: text().notNull().default("stripe"),
+    providerCustomerId: text(),
+    providerSubscriptionId: text().unique(),
+    plan: text().notNull(),
+    status: text().notNull(),
+    currentPeriodStart: timestamp({ withTimezone: true }),
+    currentPeriodEnd: timestamp({ withTimezone: true }),
+    createdAt: createdAt(),
+    updatedAt: updatedAt(),
+  },
+  (t) => [index().on(t.organizationId), index().on(t.projectId)],
+);
+
 export type Org = typeof organization.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
 export type Run = typeof runs.$inferSelect;
 export type RunInsert = typeof runs.$inferInsert;
+export type Subscription = typeof subscriptions.$inferSelect;
+export type SubscriptionInsert = typeof subscriptions.$inferInsert;
