@@ -6,8 +6,10 @@ import {
   bearerToken,
   markApiKeyUsed,
 } from "@/lib/api-keys";
+import { checkRateLimit } from "@/lib/rate-limit";
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
+const BASELINE_RATE_LIMIT = { windowSeconds: 60, max: 60 };
 
 /**
  * The most recent matching run for this project's API key, for `toolgrade run --baseline <url>`
@@ -24,6 +26,21 @@ export async function GET(request: Request) {
   const db = await getDb();
   const key = await authenticateApiKey(db, token);
   if (!key) return json({ error: "invalid or revoked API key" }, 401);
+
+  const withinRate = await checkRateLimit(
+    db,
+    `baseline:${key.id}`,
+    BASELINE_RATE_LIMIT.windowSeconds,
+    BASELINE_RATE_LIMIT.max,
+  );
+  if (!withinRate) {
+    return json(
+      {
+        error: `too many requests for this API key - at most ${BASELINE_RATE_LIMIT.max} per ${BASELINE_RATE_LIMIT.windowSeconds}s`,
+      },
+      429,
+    );
+  }
 
   const { searchParams } = new URL(request.url);
   const suite = searchParams.get("suite");

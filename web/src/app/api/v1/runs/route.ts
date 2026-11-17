@@ -3,7 +3,10 @@ import { getDb } from "@/db/client";
 import { apiKeys, organization, projects, runs } from "@/db/schema";
 import { bearerToken, hashApiKey } from "@/lib/api-keys";
 import { hasNul, MAX_UPLOAD_BYTES, toRunRow, UploadSchema } from "@/lib/ingest";
+import { checkRateLimit } from "@/lib/rate-limit";
 import { getUsageStatus } from "@/lib/usage";
+
+const INGEST_RATE_LIMIT = { windowSeconds: 60, max: 30 };
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 const tooLarge = () =>
@@ -56,6 +59,21 @@ export async function POST(request: Request) {
     .where(and(eq(apiKeys.hash, hashApiKey(token)), isNull(apiKeys.revokedAt)))
     .limit(1);
   if (!key) return json({ error: "invalid or revoked API key" }, 401);
+
+  const withinRate = await checkRateLimit(
+    db,
+    `ingest:${key.id}`,
+    INGEST_RATE_LIMIT.windowSeconds,
+    INGEST_RATE_LIMIT.max,
+  );
+  if (!withinRate) {
+    return json(
+      {
+        error: `too many uploads for this API key - at most ${INGEST_RATE_LIMIT.max} per ${INGEST_RATE_LIMIT.windowSeconds}s`,
+      },
+      429,
+    );
+  }
 
   // Checked before reading the body: an over-limit upload shouldn't make us buffer it either.
   // Does not silently drop the report - the CLI surfaces this 402 and its message directly.

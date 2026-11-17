@@ -1,4 +1,5 @@
 import {
+  bigint,
   boolean,
   doublePrecision,
   index,
@@ -109,6 +110,19 @@ export const member = pgTable(
   },
   (t) => [uniqueIndex().on(t.organizationId, t.userId), index().on(t.userId)],
 );
+
+/**
+ * Shared by two independent users: Better Auth's own `rateLimit.storage: "database"` (session
+ * endpoints, keyed by its own scheme) and our own ingest/baseline-fetch limiter in
+ * lib/rate-limit.ts (keys prefixed "ingest:"/"baseline:" so the two can never collide). One table
+ * instead of two, since both are the same shape: a key, a count, and when the window started.
+ */
+export const rateLimit = pgTable("rate_limit", {
+  id: id(),
+  key: text().notNull().unique(),
+  count: integer().notNull(),
+  lastRequest: bigint({ mode: "number" }).notNull(),
+});
 
 export const invitation = pgTable("invitation", {
   id: id(),

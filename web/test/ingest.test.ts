@@ -263,3 +263,42 @@ describe("POST /api/v1/runs - usage limits", () => {
     expect((await post(live.key)).status).toBe(201);
   });
 });
+
+describe("POST /api/v1/runs - rate limiting", () => {
+  it("rejects with 429 once an API key exceeds the per-minute upload limit", async () => {
+    const db = await getDb();
+    const [org] = await db
+      .insert(organization)
+      .values({ slug: "rate-limit", name: "Rate Limit" })
+      .returning();
+    const [project] = await db
+      .insert(projects)
+      .values({ orgId: org!.id, slug: "p", name: "P" })
+      .returning();
+    await giveActivePlan(db, org!.id, "team", project!.id); // plenty of units, isolates this from the usage-limit test above
+    const live = generateApiKey();
+    await db.insert(apiKeys).values({
+      projectId: project!.id,
+      name: "ci",
+      prefix: live.prefix,
+      hash: live.hash,
+    });
+
+    const statuses: number[] = [];
+    for (let i = 0; i < 31; i++) {
+      const res = await POST(
+        new Request("http://localhost:3000/api/v1/runs", {
+          method: "POST",
+          headers: {
+            "content-type": "application/json",
+            authorization: `Bearer ${live.key}`,
+          },
+          body: JSON.stringify({ report }),
+        }),
+      );
+      statuses.push(res.status);
+    }
+    expect(statuses.slice(0, 30)).toEqual(Array(30).fill(201));
+    expect(statuses[30]).toBe(429);
+  });
+});

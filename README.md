@@ -94,8 +94,9 @@ ToolGrade is there to measure - and a small judge is less reliable on `llm` asse
 `web/` is the hosted side: run history with trend charts, per-task drill-down into every trial's
 tool calls, run-vs-run regression compare, and per-project API keys for CI uploads
 (`toolgrade run ... --upload <url>` or `toolgrade upload <report.json>`). It runs locally with no
-infrastructure - see [web/README.md](web/README.md) and the stack decision in
-[docs/ADR-001-web-stack.md](docs/ADR-001-web-stack.md).
+infrastructure - see [web/README.md](web/README.md), the stack decision in
+[docs/ADR-001-web-stack.md](docs/ADR-001-web-stack.md), and the security/privacy posture in
+[docs/SECURITY.md](docs/SECURITY.md).
 
 ## Commands
 
