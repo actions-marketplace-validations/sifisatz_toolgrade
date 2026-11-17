@@ -99,11 +99,16 @@ SEED_OUT_DIR=.data/prod pnpm seed
 | `BETTER_AUTH_SECRET` | 32+ random bytes; rotate with `BETTER_AUTH_SECRETS` |
 | `BETTER_AUTH_URL` | Public origin, e.g. `https://app.toolgrade.dev` |
 | `DEMO_PASSWORD` | Optional: enables "Explore the demo workspace"; omit to disable it |
+| `STRIPE_SECRET_KEY` | Stripe API key. Required only once billing is wired up to a real Stripe account - unset, every Stripe-touching code path throws instead of silently no-opping |
+| `STRIPE_WEBHOOK_SECRET` | From the Stripe webhook endpoint pointed at `/api/stripe/webhook` |
+| `STRIPE_PRICE_EARLY_ACCESS`, `STRIPE_PRICE_TEAM`, `STRIPE_PRICE_GROWTH` | Stripe Price ids for the three paid plans (see `lib/plans.ts`) |
 
 ## Not in the PoC
 
 Email verification and password reset (need an email provider), social sign-in, invitations UI,
-billing, model-drift alerts, hosted runners.
+a billing UI (Checkout/portal/webhook handling exist in `lib/billing.ts` and
+`api/stripe/webhook`, but nothing in the dashboard links to them yet), model-drift alerts,
+hosted runners.
 
 ## Marketing site on GitHub Pages
 

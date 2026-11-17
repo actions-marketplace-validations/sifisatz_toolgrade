@@ -4,7 +4,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { loadSuite, runSuite, ScriptedProvider } from "toolgrade";
 import { beforeAll, describe, expect, it } from "vitest";
 import { POST } from "@/app/api/v1/runs/route";
-import { revokeApiKey } from "@/app/app/[org]/[project]/settings/actions";
+import {
+  openBillingPortal,
+  revokeApiKey,
+  startCheckout,
+} from "@/app/app/[org]/[project]/settings/actions";
 import { Lift } from "@/components/status";
 import { getDb } from "@/db/client";
 import { apiKeys, organization, projects } from "@/db/schema";
@@ -157,6 +161,30 @@ describe("server actions validate their arguments", () => {
     ).toEqual({
       ok: false,
       error: "Project not found, or you cannot manage its keys.",
+    });
+  });
+
+  it("rejects a checkout for a malformed org/project slug without touching Stripe", async () => {
+    // "../x" fails the slug format itself, so this is rejected before any session lookup -
+    // like revokeApiKey's own malformed-slug case above (findManagedProject needs a request
+    // context for getSession() that only a real request, not a unit test, can provide).
+    expect(await startCheckout("../x", "p", "team")).toEqual({
+      error: "Project not found, or you cannot manage its billing.",
+    });
+    expect(await startCheckout("../x", "p", "growth")).toEqual({
+      error: "Organization not found, or you cannot manage its billing.",
+    });
+    expect(await startCheckout("x", "p", "free")).toEqual({
+      error: "Not a paid plan.",
+    });
+    expect(await startCheckout("x", "p", "not-a-plan")).toEqual({
+      error: "Not a paid plan.",
+    });
+  });
+
+  it("rejects opening the billing portal for a malformed org slug", async () => {
+    expect(await openBillingPortal("../x")).toEqual({
+      error: "Organization not found, or you cannot manage its billing.",
     });
   });
 });

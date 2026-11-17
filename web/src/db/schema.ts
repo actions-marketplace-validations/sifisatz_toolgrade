@@ -222,6 +222,17 @@ export const subscriptions = pgTable(
   (t) => [index().on(t.organizationId), index().on(t.projectId)],
 );
 
+/**
+ * Every Stripe webhook event id we've processed, so a retried delivery (Stripe retries on
+ * anything but a 2xx, and may also just send the same event twice) applies its effect at most
+ * once. The id is the whole row - no other state needed to make "insert, if that fails we've seen
+ * it already" work.
+ */
+export const stripeEvents = pgTable("stripe_events", {
+  id: text().primaryKey(),
+  createdAt: createdAt(),
+});
+
 export type Org = typeof organization.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;
