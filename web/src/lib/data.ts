@@ -14,6 +14,7 @@ import { connection } from "next/server";
 import { cache } from "react";
 import { getDb } from "@/db/client";
 import { apiKeys, member, organization, projects, runs } from "@/db/schema";
+import { queryPendingInvitations } from "@/lib/invitations";
 import { queryOrgMembers } from "@/lib/members";
 import {
   queryModelMatrix,
@@ -265,4 +266,11 @@ export async function listOrgMembers(orgId: string) {
   await connection();
   const db = await getDb();
   return queryOrgMembers(db, orgId);
+}
+
+/** Every not-yet-expired pending invitation for an org, for the Members page. */
+export async function listPendingInvitations(orgId: string) {
+  await connection();
+  const db = await getDb();
+  return queryPendingInvitations(db, orgId);
 }

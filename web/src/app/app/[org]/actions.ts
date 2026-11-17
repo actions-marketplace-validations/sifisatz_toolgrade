@@ -77,6 +77,56 @@ export async function updateOrgMemberRole(
   }
 }
 
+export type InviteActionState = MemberActionState & { invitationId?: string };
+
+/**
+ * Invites someone by email - owner/admin only (enforced by the organization plugin). There is no
+ * outbound email yet (see web/README.md's Operations section), so the caller gets the invitation
+ * id back to build a shareable link themselves (`/accept-invite/<id>`); the invited person still
+ * needs a session with a matching email to view or accept it.
+ */
+export async function inviteMember(
+  orgSlug: string,
+  email: string,
+  role: "member" | "admin",
+): Promise<InviteActionState> {
+  const organizationId = await orgIdForSlug(orgSlug);
+  if (!organizationId) return { ok: false, error: "Organization not found." };
+
+  const auth = await getAuth();
+  try {
+    const invitation = await auth.api.createInvitation({
+      body: { email, role, organizationId },
+      headers: await headers(),
+    });
+    refresh();
+    return { ok: true, invitationId: invitation.id };
+  } catch (err) {
+    return actionError(err, "Could not send the invitation.");
+  }
+}
+
+/** Cancels a pending invitation - owner/admin only (enforced by the organization plugin). */
+export async function cancelInvitation(
+  orgSlug: string,
+  invitationId: string,
+): Promise<MemberActionState> {
+  const organizationId = await orgIdForSlug(orgSlug);
+  if (!organizationId) return { ok: false, error: "Organization not found." };
+
+  const auth = await getAuth();
+  try {
+    await auth.api.cancelInvitation({
+      body: { invitationId },
+      headers: await headers(),
+    });
+    refresh();
+    return { ok: true };
+  } catch (err) {
+    return actionError(err, "Could not cancel the invitation.");
+  }
+}
+
 /** A member removing themselves - refused for the org's last owner, same as removeOrgMember. */
 export async function leaveOrg(orgSlug: string): Promise<MemberActionState> {
   const organizationId = await orgIdForSlug(orgSlug);

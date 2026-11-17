@@ -71,6 +71,11 @@ node dist/cli.js upload .toolgrade/runs/latest.json --url http://localhost:3100 
   same 404 as a missing org; every server action re-checks the session and requires the
   `owner` or `admin` role to create or revoke API keys.
 - CLI uploads authenticate with project API keys, not user sessions.
+- Owners/admins invite by email from the Members page (Better Auth's organization plugin owns
+  the invitation, acceptance and membership-limit rules). There is no outbound email yet, so the
+  inviter gets a shareable `/accept-invite/<id>` link back instead; accepting it still requires a
+  session whose email matches the invite exactly. A brand-new invitee who doesn't have an account
+  is routed through sign-up and back to the invite (not the normal onboarding flow) via `next`.
 
 ## Deployment
 
@@ -152,9 +157,8 @@ SEED_OUT_DIR=.data/prod pnpm seed
 
 ## Not in the PoC
 
-Email verification and password reset (need an email provider), social sign-in, invitations UI
-(a "Members" page exists for managing existing members, but there is no way to invite someone
-new yet), model-drift alerts, hosted runners.
+Email verification and password reset (need an email provider), social sign-in, model-drift
+alerts, hosted runners.
 
 ## Marketing site on GitHub Pages
 

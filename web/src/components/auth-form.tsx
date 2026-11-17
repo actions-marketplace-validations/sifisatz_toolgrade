@@ -10,9 +10,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { authClient } from "@/lib/auth-client";
 
-/** Only same-site paths are honoured as a post-sign-in destination (no open redirects). */
-function safeNext(value: string | null): string {
-  return value?.startsWith("/") && !value.startsWith("//") ? value : "/app";
+/**
+ * Only same-site paths are honoured as a post-sign-in destination (no open redirects); `null`
+ * means "no explicit destination was requested", distinct from the default "/app" so sign-up can
+ * tell "go to onboarding" apart from "an invite link sent you here, go there instead".
+ */
+function safeNext(value: string | null): string | null {
+  return value?.startsWith("/") && !value.startsWith("//") ? value : null;
 }
 
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
@@ -40,7 +44,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         setError(res.error.message ?? "Something went wrong. Try again.");
         return;
       }
-      router.push(mode === "sign-up" ? "/onboarding" : next);
+      router.push(next ?? (mode === "sign-up" ? "/onboarding" : "/app"));
       router.refresh();
     });
   }
@@ -128,7 +132,9 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
           <>
             New to ToolGrade?{" "}
             <Link
-              href="/sign-up"
+              href={
+                next ? `/sign-up?next=${encodeURIComponent(next)}` : "/sign-up"
+              }
               className="font-medium text-foreground underline-offset-4 hover:underline"
             >
               Create an account
@@ -138,7 +144,9 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
           <>
             Already have an account?{" "}
             <Link
-              href="/sign-in"
+              href={
+                next ? `/sign-in?next=${encodeURIComponent(next)}` : "/sign-in"
+              }
               className="font-medium text-foreground underline-offset-4 hover:underline"
             >
               Sign in
