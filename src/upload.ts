@@ -42,3 +42,24 @@ export async function uploadReport(baseUrl: string, apiKey: string, report: RunR
   if (!res.ok) throw new Error(`upload failed: ${res.status} ${(await res.text()).slice(0, 300)}`);
   return (await res.json()) as UploadResult;
 }
+
+export interface BaselineQuery {
+  suite: string;
+  /** Match only this branch's runs (e.g. the PR's base branch); omitted matches any branch. */
+  branch?: string;
+}
+
+/**
+ * The most recent run uploaded for this suite (and branch, if given), or undefined when the
+ * project has none yet - a new project's first CI run should not be treated as a regression.
+ */
+export async function fetchBaseline(baseUrl: string, apiKey: string, query: BaselineQuery, fetchFn: typeof fetch = fetch): Promise<RunReport | undefined> {
+  const url = new URL(`${baseUrl.replace(/\/+$/, "")}/api/v1/runs/latest`);
+  url.searchParams.set("suite", query.suite);
+  if (query.branch) url.searchParams.set("branch", query.branch);
+  const res = await fetchFn(url, { headers: { authorization: `Bearer ${apiKey}` }, signal: AbortSignal.timeout(30_000) });
+  if (res.status === 404) return undefined;
+  if (!res.ok) throw new Error(`baseline fetch failed: ${res.status} ${(await res.text()).slice(0, 300)}`);
+  const body = (await res.json()) as { report: RunReport };
+  return body.report;
+}

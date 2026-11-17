@@ -12,7 +12,7 @@ import { OpenAICompatibleProvider } from "./providers/openai.js";
 import type { ModelProvider } from "./providers/types.js";
 import { formatComparison, formatLint, formatMarkdown, formatTerminal } from "./report.js";
 import { runSuite, type RunReport } from "./runner.js";
-import { detectGitMeta, uploadReport } from "./upload.js";
+import { detectGitMeta, fetchBaseline, uploadReport } from "./upload.js";
 
 const EXIT_GATE_FAILED = 1;
 const EXIT_USAGE = 2;
@@ -39,10 +39,13 @@ program
   .option("-o, --out-dir <dir>", "where run reports are written", ".toolgrade/runs")
   .option("--markdown <file>", "also write a Markdown summary (for PR comments)")
   .option("--compare <report>", "compare against a previous run report; regression fails the run")
+  .option("--baseline <url>", "compare against the most recent matching run on a ToolGrade platform instead of --compare (key from TOOLGRADE_API_KEY)")
+  .option("--baseline-branch <branch>", "only match a baseline from this branch (default: the PR base branch in GitHub Actions, otherwise any branch)")
   .option("--provider <name>", "anthropic, or openai for any OpenAI-compatible endpoint (Ollama, OpenAI, Gemini, Groq...)", "anthropic")
   .option("--base-url <url>", "endpoint for --provider openai", "http://localhost:11434/v1")
   .option("--api-key-env <var>", "env var holding the key for --provider openai (Ollama needs none)", "OPENAI_API_KEY")
   .option("--local-model", "the model runs on your own hardware: price it at $0")
+  .option("--request-timeout <seconds>", "per model call, for --provider openai (slow local hardware needs more)", positiveInt, 300)
   .option("-m, --model <id>", "agent model (overrides the suite)")
   .option("--judge-model <id>", "judge model (overrides the suite; defaults to --model when that is given)")
   .option("--upload <url>", "upload the report to a ToolGrade platform (key from TOOLGRADE_API_KEY)")
@@ -58,9 +61,14 @@ program
     if (o.provider === "openai" && (o.localModel || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(o.baseUrl))) {
       for (const m of [suite.agent.model, suite.judge.model]) suite.pricing[m] ??= { input: 0, output: 0 };
     }
+    if (o.compare && o.baseline) throw new InvalidArgumentError("use either --compare or --baseline, not both");
     const apiKey = process.env.TOOLGRADE_API_KEY;
-    if (o.upload && !apiKey) throw new InvalidArgumentError("--upload needs TOOLGRADE_API_KEY (create one in the project's settings)");
-    const previous = o.compare ? await readReport(o.compare) : undefined;
+    if ((o.upload || o.baseline) && !apiKey) throw new InvalidArgumentError("--upload/--baseline need TOOLGRADE_API_KEY (create one in the project's settings)");
+    const previous = o.compare
+      ? await readReport(o.compare)
+      : o.baseline
+        ? await fetchBaseline(o.baseline, apiKey!, { suite: suite.name, branch: o.baselineBranch ?? process.env.GITHUB_BASE_REF })
+        : undefined;
     const report = await runSuite(suite, {
       provider: makeProvider(o),
       trials: o.trials,
@@ -164,9 +172,9 @@ program
     if (cmp.verdict === "regressed") process.exitCode = EXIT_GATE_FAILED;
   });
 
-function makeProvider(o: { provider: string; baseUrl: string; apiKeyEnv: string }): ModelProvider {
+function makeProvider(o: { provider: string; baseUrl: string; apiKeyEnv: string; requestTimeout: number }): ModelProvider {
   if (o.provider === "anthropic") return new AnthropicProvider();
-  if (o.provider === "openai") return new OpenAICompatibleProvider({ baseUrl: o.baseUrl, apiKey: process.env[o.apiKeyEnv] });
+  if (o.provider === "openai") return new OpenAICompatibleProvider({ baseUrl: o.baseUrl, apiKey: process.env[o.apiKeyEnv], timeoutMs: o.requestTimeout * 1000 });
   throw new InvalidArgumentError(`unknown provider "${o.provider}" (use anthropic or openai)`);
 }
 

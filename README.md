@@ -200,17 +200,25 @@ OpenAI, Gemini, Groq, a self-hosted vLLM, or a local Ollama with no key at all) 
 `api-key-env` inputs, then export that same-named env var on the step. Self-hosted runners work
 the same way - nothing in the action depends on GitHub-hosted infrastructure.
 
-**Baseline comparison.** Download the previous run's report (e.g. from a build artifact uploaded
-on the default branch, as in the example workflow) and pass its path as the `compare` input - a
-statistically significant regression then fails the job. With no prior report (first run, or the
-artifact download found nothing), `compare` is skipped rather than treated as a regression.
+**Baseline comparison.** Two ways to get one, and you only need one of them:
+
+- *Hosted (simplest).* Set `upload-url` and an API key (see below), then set `baseline` to the
+  same platform origin. Each run compares against the most recent previously-uploaded run for the
+  same suite - matched to the PR's base branch automatically in GitHub Actions (`GITHUB_BASE_REF`),
+  or set `baseline-branch` explicitly. No build artifacts to manage.
+- *Artifact-based (no hosted project needed).* Download the previous run's report (e.g. from a
+  build artifact uploaded on the default branch, as in the example workflow) and pass its path as
+  the `compare` input.
+
+Either way, a statistically significant regression fails the job; with no prior report yet (first
+run, nothing uploaded, or nothing in the artifact), the comparison is skipped rather than treated
+as a regression. `compare` and `baseline` are mutually exclusive - use one or the other.
 
 **Uploading to a hosted ToolGrade project.** Set `upload-url` to your platform origin (e.g.
 `https://app.toolgrade.dev`) and either set `TOOLGRADE_API_KEY` as an env var on the step or pass
 it as the `toolgrade-api-key` input, from a project API key (Settings -> API keys in the
-dashboard). This uploads the report for history and comparison in the dashboard; it is independent
-of (and additional to) the artifact-based `compare` above, which is what actually fails the build
-today.
+dashboard). This is also what `baseline` above reads from, and separately gives you run history
+and comparisons in the dashboard.
 
 **Private or self-hosted MCP servers.** The action makes no assumptions about your server beyond
 what the suite's `server:` block says - a stdio command the runner can execute, or an HTTP(S) URL

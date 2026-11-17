@@ -24,6 +24,14 @@ inputs:
     description: Previous run report JSON to compare against; a significant regression fails the job
     required: false
     default: ""
+  baseline:
+    description: ToolGrade platform origin to compare against the most recent matching run instead of --compare, e.g. https://app.toolgrade.dev (key from toolgrade-api-key or TOOLGRADE_API_KEY)
+    required: false
+    default: ""
+  baseline-branch:
+    description: Only match a baseline from this branch (defaults to the PR's base branch, otherwise any branch)
+    required: false
+    default: ""
   model:
     description: Agent model (overrides the suite)
     required: false
@@ -79,6 +87,8 @@ runs:
         TG_FILTER: ${{ inputs.filter }}
         TG_NO_BASELINE: ${{ inputs.no-baseline }}
         TG_COMPARE: ${{ inputs.compare }}
+        TG_BASELINE: ${{ inputs.baseline }}
+        TG_BASELINE_BRANCH: ${{ inputs.baseline-branch }}
         TG_MODEL: ${{ inputs.model }}
         TG_JUDGE_MODEL: ${{ inputs.judge-model }}
         TG_PROVIDER: ${{ inputs.provider }}
@@ -98,6 +108,8 @@ runs:
         [ -n "$TG_FILTER" ] && args+=(--filter "$TG_FILTER")
         [ "$TG_NO_BASELINE" = "true" ] && args+=(--no-baseline)
         [ -n "$TG_COMPARE" ] && args+=(--compare "$TG_COMPARE")
+        [ -n "$TG_BASELINE" ] && args+=(--baseline "$TG_BASELINE")
+        [ -n "$TG_BASELINE_BRANCH" ] && args+=(--baseline-branch "$TG_BASELINE_BRANCH")
         [ -n "$TG_MODEL" ] && args+=(--model "$TG_MODEL")
         [ -n "$TG_JUDGE_MODEL" ] && args+=(--judge-model "$TG_JUDGE_MODEL")
         [ -n "$TG_PROVIDER" ] && args+=(--provider "$TG_PROVIDER")

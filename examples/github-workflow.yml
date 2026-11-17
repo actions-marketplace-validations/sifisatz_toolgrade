@@ -14,7 +14,9 @@ jobs:
           node-version: 22
       - run: npm ci
 
-      # Baseline report from the default branch, if a previous run uploaded one.
+      # Without a hosted ToolGrade project, compare against the default branch's last uploaded
+      # report instead - download it as a build artifact (skip this step and `compare:` below if
+      # you're using `baseline:`/`upload-url:` instead).
       - uses: dawidd6/action-download-artifact@v6
         continue-on-error: true
         with:
@@ -28,9 +30,10 @@ jobs:
         with:
           suite: evals/suite.yaml
           compare: ${{ hashFiles('previous/latest.json') != '' && 'previous/latest.json' || '' }}
-          # Optional: also upload to a hosted ToolGrade project for history and dashboards.
-          # This does not affect the pass/fail above - that's the `compare` above (or the
-          # suite's own `gate:`).
+          # Hosted alternative to the artifact dance above: compares against the most recent
+          # uploaded run for this suite (matched to this PR's base branch automatically), and
+          # gives you run history and dashboards. Drop `compare:` above if you use this.
+          # baseline: https://app.toolgrade.dev
           # upload-url: https://app.toolgrade.dev
           # toolgrade-api-key: ${{ secrets.TOOLGRADE_API_KEY }}
 
