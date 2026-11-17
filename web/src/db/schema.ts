@@ -187,6 +187,8 @@ export const runs = pgTable(
     branch: text(),
     commit: text(),
     commitMessage: text(),
+    /** See lib/usage.ts: one per (task, trial) where every arm that ran for it completed cleanly. */
+    billableUnits: integer().notNull().default(0),
     report: jsonb().$type<RunReport>().notNull(),
   },
   (t) => [index().on(t.projectId, t.createdAt)],

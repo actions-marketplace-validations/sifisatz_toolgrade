@@ -6,6 +6,7 @@ import { getDb } from "@/db/client";
 import { apiKeys, organization, projects, runs } from "@/db/schema";
 import { bearerToken, generateApiKey, hashApiKey } from "@/lib/api-keys";
 import { toRunRow, UploadSchema } from "@/lib/ingest";
+import { billableUnits } from "@/lib/usage";
 import { notesAgent } from "../../examples/scripted-agent";
 
 const SUITE = join(
@@ -130,6 +131,7 @@ describe("POST /api/v1/runs", () => {
       branch: "feat/x",
       commitMessage: "Try it",
       passRate: report.overall.tools.rate.rate,
+      billableUnits: billableUnits(report),
     });
     const used = (await db.select().from(apiKeys)).find((k) => k.name === "ci");
     expect(used!.lastUsedAt).not.toBeNull();

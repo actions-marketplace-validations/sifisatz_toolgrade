@@ -1,6 +1,7 @@
 import type { RunReport } from "toolgrade/core";
 import { z } from "zod";
 import type { RunInsert } from "@/db/schema";
+import { billableUnits } from "@/lib/usage";
 
 // Everything a page renders is validated here, with types and bounds that also fit the database
 // columns, so a stored run can never crash its own pages later. Unknown keys are stripped; fields
@@ -180,6 +181,7 @@ export function toRunRow(
     branch: upload.meta.branch ?? null,
     commit: upload.meta.commit ?? null,
     commitMessage: upload.meta.commitMessage ?? null,
+    billableUnits: billableUnits(r as unknown as RunReport),
     report: r as unknown as RunReport,
   };
 }

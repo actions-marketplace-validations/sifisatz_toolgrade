@@ -15,6 +15,13 @@
       "when": 1794920371222,
       "tag": "0001_sparkling_lockjaw",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1794921509712,
+      "tag": "0002_safe_rick_jones",
+      "breakpoints": true
     }
   ]
 }
