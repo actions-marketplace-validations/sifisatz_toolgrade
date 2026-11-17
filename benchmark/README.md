@@ -62,13 +62,28 @@ Read from the trial trajectories in `results/2026-11-16-qwen3-8b/`:
   zero means the scaffold did not help on these problems with this model, not that it never helps.
 - Servers that need accounts or API keys (GitHub, Slack, ...) are not in v0.
 
-## Reproduce
+## Reproduce (containerised - recommended)
+
+Nothing is installed on the host except Podman. The model and every MCP server under test run in
+containers on a dedicated Podman machine:
+
+| Container | What | Isolation |
+|---|---|---|
+| `tg-ollama` | Ollama 0.40.16 serving the model from the `tg-ollama` volume | internal network only |
+| `toolgrade-runner` | the CLI and the pinned MCP servers; servers are spawned inside it | internal network (reaches only `tg-ollama`, no internet), non-root, read-only root filesystem, all capabilities dropped; writes only `benchmark/results` and a `/tmp` tmpfs for trial sandboxes |
 
 ```bash
-pnpm install && pnpm build
-ollama pull qwen3:8b && ollama serve          # or any OpenAI-compatible endpoint
-benchmark/run.sh openai qwen3:8b               # ~40 minutes on a laptop
-npx tsx benchmark/summarize.mts                 # rebuilds the leaderboard
+benchmark/container/tg.sh up                     # dedicated 'toolgrade' Podman machine + Ollama
+benchmark/container/tg.sh pull qwen3:8b          # once: downloads the model into the volume
+benchmark/container/tg.sh build                  # runner image
+benchmark/container/tg.sh run qwen3:8b           # all suites, or name suites after the model
+npx tsx benchmark/summarize.mts                  # rebuilds the leaderboard
+benchmark/container/tg.sh down                   # stop the containers and the machine
 ```
 
-With a hosted model: `benchmark/run.sh anthropic claude-sonnet-5` (needs `ANTHROPIC_API_KEY`).
+Podman on macOS runs one machine at a time, so `up` refuses to start while another machine is
+running. On a Mac the model runs on CPU inside the VM (the official arm64 Ollama image has no
+Vulkan backend); `qwen3:8b` generates ~28 tokens/s on 8 cores.
+
+Without containers: `ollama serve`, then `benchmark/run.sh openai qwen3:8b` on the host. With a
+hosted model: `benchmark/run.sh anthropic claude-sonnet-5` (needs `ANTHROPIC_API_KEY`).

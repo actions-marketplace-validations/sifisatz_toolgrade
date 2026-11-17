@@ -16,7 +16,7 @@ if [ $# -gt 0 ]; then SUITES=(); for s in "$@"; do SUITES+=("benchmark/suites/$s
 for suite in "${SUITES[@]}"; do
   name=$(basename "$suite" .yaml)
   echo "=== $name ($MODEL)"
-  node dist/cli.js run "$suite" --provider "$PROVIDER" --base-url "$BASE_URL" --model "$MODEL" \
+  node dist/cli.js run "$suite" --provider "$PROVIDER" --base-url "$BASE_URL" --model "$MODEL" ${LOCAL_MODEL:+--local-model} \
     --out-dir "$OUT/.runs/$name" --markdown "$OUT/$name.md" > "$OUT/$name.log" 2>&1
   echo "exit=$?"
   cp "$OUT/.runs/$name/latest.json" "$OUT/$name.json" 2>/dev/null || echo "no report for $name"

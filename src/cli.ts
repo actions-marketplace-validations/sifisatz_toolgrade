@@ -42,6 +42,7 @@ program
   .option("--provider <name>", "anthropic, or openai for any OpenAI-compatible endpoint (Ollama, OpenAI, Gemini, Groq...)", "anthropic")
   .option("--base-url <url>", "endpoint for --provider openai", "http://localhost:11434/v1")
   .option("--api-key-env <var>", "env var holding the key for --provider openai (Ollama needs none)", "OPENAI_API_KEY")
+  .option("--local-model", "the model runs on your own hardware: price it at $0")
   .option("-m, --model <id>", "agent model (overrides the suite)")
   .option("--judge-model <id>", "judge model (overrides the suite; defaults to --model when that is given)")
   .option("--upload <url>", "upload the report to a ToolGrade platform (key from TOOLGRADE_API_KEY)")
@@ -53,7 +54,8 @@ program
     }
     if (o.judgeModel) suite.judge.model = o.judgeModel;
     // Local inference has no API bill; price it at zero unless the suite says otherwise.
-    if (o.provider === "openai" && /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(o.baseUrl)) {
+    // --local-model covers local servers on other hostnames (e.g. a container named tg-ollama).
+    if (o.provider === "openai" && (o.localModel || /^https?:\/\/(localhost|127\.0\.0\.1|\[::1\])[:/]/.test(o.baseUrl))) {
       for (const m of [suite.agent.model, suite.judge.model]) suite.pricing[m] ??= { input: 0, output: 0 };
     }
     const apiKey = process.env.TOOLGRADE_API_KEY;
