@@ -12,6 +12,7 @@
     "seed": "tsx scripts/seed.ts",
     "db:generate": "drizzle-kit generate",
     "db:migrate": "tsx scripts/migrate.ts",
+    "growth:report": "tsx scripts/growth-report.ts",
     "format": "biome format --write"
   },
   "dependencies": {

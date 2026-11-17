@@ -1,6 +1,7 @@
 import { and, eq, isNull } from "drizzle-orm";
 import { getDb } from "@/db/client";
 import { apiKeys, organization, projects, runs } from "@/db/schema";
+import { recordEvent } from "@/lib/analytics";
 import { bearerToken, hashApiKey } from "@/lib/api-keys";
 import { hasNul, MAX_UPLOAD_BYTES, toRunRow, UploadSchema } from "@/lib/ingest";
 import { logError, logInfo, logWarn, newRequestId } from "@/lib/logger";
@@ -198,6 +199,15 @@ export async function POST(request: Request) {
     .update(apiKeys)
     .set({ lastUsedAt: new Date() })
     .where(eq(apiKeys.id, key.id));
+  await recordEvent(db, {
+    name: "run_ingested",
+    organizationId: key.orgId,
+    projectId: key.projectId,
+    properties: {
+      gatePassed: parsed.data.report.gate.passed,
+      taskCount: parsed.data.report.tasks.length,
+    },
+  });
 
   logInfo("ingest succeeded", {
     requestId,

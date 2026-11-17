@@ -1,9 +1,10 @@
 import type Stripe from "stripe";
 import { getDb } from "@/db/client";
 import { stripeEvents } from "@/db/schema";
+import { recordEvent } from "@/lib/analytics";
 import { upsertFromSubscription } from "@/lib/billing";
 import { logError, logInfo, logWarn, newRequestId } from "@/lib/logger";
-import { getStripe, requireWebhookSecret } from "@/lib/stripe";
+import { getStripe, planForPriceId, requireWebhookSecret } from "@/lib/stripe";
 
 const json = (body: unknown, status = 200) => Response.json(body, { status });
 
@@ -69,10 +70,20 @@ export async function POST(request: Request) {
         .returning({ id: stripeEvents.id });
       if (inserted.length === 0) return "duplicate" as const;
       if (HANDLED_TYPES.has(event.type)) {
-        await upsertFromSubscription(
-          tx,
-          event.data.object as Stripe.Subscription,
-        );
+        const sub = event.data.object as Stripe.Subscription;
+        await upsertFromSubscription(tx, sub);
+        if (event.type === "customer.subscription.created") {
+          const item = sub.items.data[0];
+          const plan = item && planForPriceId(item.price.id);
+          if (plan && sub.metadata.organizationId) {
+            await recordEvent(tx, {
+              name: "subscription_started",
+              organizationId: sub.metadata.organizationId,
+              projectId: sub.metadata.projectId || undefined,
+              properties: { plan },
+            });
+          }
+        }
       }
       return "processed" as const;
     });

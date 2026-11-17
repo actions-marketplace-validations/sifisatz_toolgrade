@@ -7,6 +7,7 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { getDb } from "@/db/client";
 import { organization, projects } from "@/db/schema";
+import { recordEvent } from "@/lib/analytics";
 import { getAuth } from "@/lib/auth";
 import { getSession } from "@/lib/session";
 import { slugify } from "@/lib/slug";
@@ -56,8 +57,20 @@ export async function createWorkspace(
 
   const projectSlug = slugify(parsed.data.project);
   const db = await getDb();
-  await db
+  const [project] = await db
     .insert(projects)
-    .values({ orgId: org.id, slug: projectSlug, name: parsed.data.project });
+    .values({ orgId: org.id, slug: projectSlug, name: parsed.data.project })
+    .returning({ id: projects.id });
+  await recordEvent(db, {
+    name: "org_created",
+    userId: s.user.id,
+    organizationId: org.id,
+  });
+  await recordEvent(db, {
+    name: "project_created",
+    userId: s.user.id,
+    organizationId: org.id,
+    projectId: project!.id,
+  });
   redirect(`/app/${slug}/${projectSlug}/settings`);
 }

@@ -247,6 +247,29 @@ export const stripeEvents = pgTable("stripe_events", {
   createdAt: createdAt(),
 });
 
+/**
+ * Append-only activation/growth-funnel log (org_created, project_created, api_key_created,
+ * run_ingested, checkout_started, subscription_started - see lib/analytics.ts). No new
+ * infrastructure: reuses the existing Postgres, same reasoning as rate_limit above. `properties`
+ * stays small and non-sensitive by construction - ids and plan names already visible elsewhere in
+ * the dashboard, never request bodies or free-text user content.
+ */
+export const productEvents = pgTable(
+  "product_events",
+  {
+    id: id(),
+    name: text().notNull(),
+    userId: uuid().references(() => user.id, { onDelete: "set null" }),
+    organizationId: uuid().references(() => organization.id, {
+      onDelete: "set null",
+    }),
+    projectId: uuid().references(() => projects.id, { onDelete: "set null" }),
+    properties: jsonb().$type<Record<string, unknown>>().notNull().default({}),
+    createdAt: createdAt(),
+  },
+  (t) => [index().on(t.name, t.createdAt)],
+);
+
 export type Org = typeof organization.$inferSelect;
 export type Project = typeof projects.$inferSelect;
 export type ApiKey = typeof apiKeys.$inferSelect;

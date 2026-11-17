@@ -1,8 +1,9 @@
 import Stripe from "stripe";
 import { beforeAll, describe, expect, it } from "vitest";
+import { eq } from "drizzle-orm";
 import { POST } from "@/app/api/stripe/webhook/route";
 import { getDb } from "@/db/client";
-import { organization, subscriptions } from "@/db/schema";
+import { organization, productEvents, subscriptions } from "@/db/schema";
 
 const SECRET = process.env.STRIPE_WEBHOOK_SECRET!;
 
@@ -93,6 +94,19 @@ describe("POST /api/stripe/webhook", () => {
       organizationId: orgId,
       plan: "early_access",
       status: "active",
+    });
+  });
+
+  it("records a subscription_started analytics event for the created event", async () => {
+    const db = await getDb();
+    const events = await db
+      .select()
+      .from(productEvents)
+      .where(eq(productEvents.name, "subscription_started"));
+    const event = events.find((e) => e.organizationId === orgId);
+    expect(event).toMatchObject({
+      organizationId: orgId,
+      properties: { plan: "early_access" },
     });
   });
 

@@ -11,6 +11,7 @@ import {
   projects,
   subscriptions,
 } from "@/db/schema";
+import { recordEvent } from "@/lib/analytics";
 import { generateApiKey } from "@/lib/api-keys";
 import { createCheckoutSession, createPortalSession } from "@/lib/billing";
 import { isPlanId, PLANS } from "@/lib/plans";
@@ -126,6 +127,12 @@ export async function startCheckout(
       cancelUrl: `${appOrigin()}/app/${orgSlug}/${projectSlug}/settings?checkout=cancelled`,
       existingCustomerId: await existingCustomerId(organizationId),
     });
+    await recordEvent(await getDb(), {
+      name: "checkout_started",
+      organizationId,
+      projectId,
+      properties: { plan },
+    });
     return { url };
   } catch (err) {
     return {
@@ -183,6 +190,11 @@ export async function createApiKey(
   await db
     .insert(apiKeys)
     .values({ projectId: project.id, name: name.data, prefix, hash });
+  await recordEvent(db, {
+    name: "api_key_created",
+    organizationId: project.orgId,
+    projectId: project.id,
+  });
   refresh();
   return { key };
 }

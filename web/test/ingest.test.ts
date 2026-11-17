@@ -4,7 +4,7 @@ import { loadSuite, runSuite, ScriptedProvider } from "toolgrade";
 import { beforeAll, describe, expect, it } from "vitest";
 import { POST } from "@/app/api/v1/runs/route";
 import { getDb } from "@/db/client";
-import { apiKeys, organization, projects, runs } from "@/db/schema";
+import { apiKeys, organization, productEvents, projects, runs } from "@/db/schema";
 import { bearerToken, generateApiKey, hashApiKey } from "@/lib/api-keys";
 import { toRunRow, UploadSchema } from "@/lib/ingest";
 import { billableUnits } from "@/lib/usage";
@@ -138,6 +138,19 @@ describe("POST /api/v1/runs", () => {
     });
     const used = (await db.select().from(apiKeys)).find((k) => k.name === "ci");
     expect(used!.lastUsedAt).not.toBeNull();
+
+    const events = await db
+      .select()
+      .from(productEvents)
+      .where(eq(productEvents.projectId, projectId));
+    expect(events.find((e) => e.name === "run_ingested")).toMatchObject({
+      organizationId: expect.any(String),
+      projectId,
+      properties: {
+        gatePassed: report.gate.passed,
+        taskCount: report.tasks.length,
+      },
+    });
   });
 
   it("rejects missing, unknown and revoked keys", async () => {

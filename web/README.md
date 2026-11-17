@@ -133,6 +133,12 @@ SEED_OUT_DIR=.data/prod pnpm seed
   (or `vercel rollback`). This only reverts the application code - if the bad deploy's migration
   already ran and is incompatible with the older code, a code-only rollback is not enough; restore
   the database first (above).
+- **Growth metrics**: `lib/analytics.ts`'s `recordEvent` writes the activation/monetization funnel
+  (`org_created`, `project_created`, `api_key_created`, `run_ingested`, `checkout_started`,
+  `subscription_started`) into the `product_events` table - no third-party analytics vendor, same
+  reasoning as the `rate_limit` table. A failed write is logged, never thrown: analytics must not
+  break the request that triggered it. Run `pnpm growth:report [days]` against `DATABASE_URL` for a
+  plain funnel summary (default: last 30 days).
 - **Not done, deliberately**: no separate error-tracking service (Sentry or similar) - structured
   logs to Vercel's own Logs tab are the extent of it for now. Revisit once there are real paying
   customers whose incidents justify a few more dollars a month; adding it before that would be
