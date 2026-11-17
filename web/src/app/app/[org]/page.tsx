@@ -62,80 +62,98 @@ async function Overview({ params }: { params: Promise<{ org: string }> }) {
           sub={failing ? "latest run below its gate" : "all latest runs pass"}
         />
       </div>
-      <div className="grid gap-4 lg:grid-cols-2">
-        {list.map((p) => (
-          <Link
-            key={p.id}
-            href={`/app/${org.slug}/${p.slug}`}
-            className="group"
-          >
-            <Card className="h-full transition-colors group-hover:border-foreground/20">
-              <CardHeader>
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <CardTitle className="truncate">{p.name}</CardTitle>
-                    <CardDescription className="mt-1 line-clamp-2">
-                      {p.description}
-                    </CardDescription>
+      {list.length === 0 ? (
+        <EmptyOrg />
+      ) : (
+        <div className="grid gap-4 lg:grid-cols-2">
+          {list.map((p) => (
+            <Link
+              key={p.id}
+              href={`/app/${org.slug}/${p.slug}`}
+              className="group"
+            >
+              <Card className="h-full transition-colors group-hover:border-foreground/20">
+                <CardHeader>
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <CardTitle className="truncate">{p.name}</CardTitle>
+                      <CardDescription className="mt-1 line-clamp-2">
+                        {p.description}
+                      </CardDescription>
+                    </div>
+                    {p.latest && <GateBadge passed={p.latest.gatePassed} />}
                   </div>
-                  {p.latest && <GateBadge passed={p.latest.gatePassed} />}
-                </div>
-              </CardHeader>
-              <CardContent>
-                {p.latest ? (
-                  <div className="flex items-end justify-between gap-4">
-                    <dl className="grid grid-cols-3 gap-6 text-sm">
-                      <div>
-                        <dt className="text-muted-foreground">Pass rate</dt>
-                        <dd className="mt-0.5 text-lg font-semibold">
-                          {pct(p.latest.passRate)}
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-muted-foreground">Lift</dt>
-                        <dd className="mt-0.5 text-lg font-semibold">
-                          <Lift value={p.latest.lift} />
-                        </dd>
-                      </div>
-                      <div>
-                        <dt className="text-muted-foreground">Cost / run</dt>
-                        <dd className="mt-0.5 text-lg font-semibold">
-                          {usd(p.latest.totalCostUsd)}
-                        </dd>
-                      </div>
-                    </dl>
-                    <div className="hidden text-right sm:block">
-                      <Sparkline
-                        values={p.trend}
-                        label={`Pass rate over the last ${p.trend.length} runs`}
-                      />
-                      <div className="mt-1 text-xs text-muted-foreground">
-                        {p.runCount} runs - {timeAgo(p.latest.createdAt)}
+                </CardHeader>
+                <CardContent>
+                  {p.latest ? (
+                    <div className="flex items-end justify-between gap-4">
+                      <dl className="grid grid-cols-3 gap-6 text-sm">
+                        <div>
+                          <dt className="text-muted-foreground">Pass rate</dt>
+                          <dd className="mt-0.5 text-lg font-semibold">
+                            {pct(p.latest.passRate)}
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted-foreground">Lift</dt>
+                          <dd className="mt-0.5 text-lg font-semibold">
+                            <Lift value={p.latest.lift} />
+                          </dd>
+                        </div>
+                        <div>
+                          <dt className="text-muted-foreground">Cost / run</dt>
+                          <dd className="mt-0.5 text-lg font-semibold">
+                            {usd(p.latest.totalCostUsd)}
+                          </dd>
+                        </div>
+                      </dl>
+                      <div className="hidden text-right sm:block">
+                        <Sparkline
+                          values={p.trend}
+                          label={`Pass rate over the last ${p.trend.length} runs`}
+                        />
+                        <div className="mt-1 text-xs text-muted-foreground">
+                          {p.runCount} runs - {timeAgo(p.latest.createdAt)}
+                        </div>
                       </div>
                     </div>
+                  ) : (
+                    <p className="flex items-center gap-2 text-sm text-muted-foreground">
+                      <Terminal className="size-4" aria-hidden /> No runs yet -
+                      connect CI from Settings.
+                    </p>
+                  )}
+                  <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
+                    <span>{p.repo}</span>
+                    <span className="flex items-center gap-2">
+                      {p.latest?.source === "demo" && <DemoBadge />}
+                      <ArrowRight
+                        className="size-4 transition-transform group-hover:translate-x-0.5"
+                        aria-hidden
+                      />
+                    </span>
                   </div>
-                ) : (
-                  <p className="flex items-center gap-2 text-sm text-muted-foreground">
-                    <Terminal className="size-4" aria-hidden /> No runs yet -
-                    connect CI from Settings.
-                  </p>
-                )}
-                <div className="mt-4 flex items-center justify-between text-xs text-muted-foreground">
-                  <span>{p.repo}</span>
-                  <span className="flex items-center gap-2">
-                    {p.latest?.source === "demo" && <DemoBadge />}
-                    <ArrowRight
-                      className="size-4 transition-transform group-hover:translate-x-0.5"
-                      aria-hidden
-                    />
-                  </span>
-                </div>
-              </CardContent>
-            </Card>
-          </Link>
-        ))}
-      </div>
+                </CardContent>
+              </Card>
+            </Link>
+          ))}
+        </div>
+      )}
     </>
+  );
+}
+
+function EmptyOrg() {
+  return (
+    <Card>
+      <CardContent className="flex flex-col items-center gap-3 py-12 text-center">
+        <Terminal className="size-8 text-muted-foreground" aria-hidden />
+        <div className="font-medium">No projects yet</div>
+        <p className="max-w-md text-sm text-muted-foreground">
+          This workspace doesn&apos;t have a project yet.
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
