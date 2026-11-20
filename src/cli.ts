@@ -2,12 +2,12 @@
 import { access, mkdir, readFile, writeFile } from "node:fs/promises";
 import { basename, dirname, join, relative, resolve } from "node:path";
 import { Command, InvalidArgumentError } from "commander";
-import { compareRuns } from "./compare.js";
+import { checkRegressionGate, compareRuns } from "./compare.js";
 import { loadSuite } from "./config.js";
 import { fingerprintSurface } from "./fingerprint.js";
 import { writeOtelExport } from "./export/otel.js";
 import { detectClientConfigs, parseClientConfig, scaffoldSuiteFromImport, type ClientName } from "./import-config.js";
-import { generateSuite, type InitServer } from "./init.js";
+import { formatGenerationSummary, generateSuite, type InitServer } from "./init.js";
 import { lintSpecCompliance, lintToolDescriptions, lintTools, lintToolSafety } from "./lint.js";
 import { openSession } from "./mcp.js";
 import { AnthropicProvider } from "./providers/anthropic.js";
@@ -24,6 +24,12 @@ const EXIT_USAGE = 2;
 const positiveInt = (v: string) => {
   const n = Number(v);
   if (!Number.isInteger(n) || n < 1) throw new InvalidArgumentError("must be a positive integer");
+  return n;
+};
+
+const positivePct = (v: string) => {
+  const n = Number(v);
+  if (!Number.isFinite(n) || n <= 0) throw new InvalidArgumentError("must be a positive number (a percent, e.g. 20 for 20%)");
   return n;
 };
 
@@ -46,6 +52,8 @@ program
   .option("--compare <report>", "compare against a previous run report; regression fails the run")
   .option("--baseline <url>", "compare against the most recent matching run on a ToolGrade platform instead of --compare (key from TOOLGRADE_API_KEY)")
   .option("--baseline-branch <branch>", "only match a baseline from this branch (default: the PR base branch in GitHub Actions, otherwise any branch)")
+  .option("--gate-cost-regression <pct>", "needs --compare/--baseline; fail the gate if any matched task's cost rose by more than this percent", positivePct)
+  .option("--gate-latency-regression <pct>", "needs --compare/--baseline; fail the gate if any matched task's mean duration rose by more than this percent", positivePct)
   .option("--provider <name>", "anthropic, or openai for any OpenAI-compatible endpoint (Ollama, OpenAI, Gemini, Groq...)", "anthropic")
   .option("--base-url <url>", "endpoint for --provider openai", "http://localhost:11434/v1")
   .option("--api-key-env <var>", "env var holding the key for --provider openai (Ollama needs none)", "OPENAI_API_KEY")
@@ -67,6 +75,9 @@ program
       for (const m of [suite.agent.model, suite.judge.model]) suite.pricing[m] ??= { input: 0, output: 0 };
     }
     if (o.compare && o.baseline) throw new InvalidArgumentError("use either --compare or --baseline, not both");
+    if ((o.gateCostRegression || o.gateLatencyRegression) && !o.compare && !o.baseline) {
+      throw new InvalidArgumentError("--gate-cost-regression/--gate-latency-regression need a previous run to compare against: pass --compare or --baseline");
+    }
     const apiKey = process.env.TOOLGRADE_API_KEY;
     if ((o.upload || o.baseline) && !apiKey) throw new InvalidArgumentError("--upload/--baseline need TOOLGRADE_API_KEY (create one in the project's settings)");
     const previous = o.compare
@@ -96,7 +107,10 @@ program
 
     console.log(formatTerminal(report));
     const cmp = previous ? compareRuns(previous, report) : undefined;
-    if (cmp) console.log(`\n${formatComparison(cmp)}`);
+    const regressionChecks = cmp
+      ? checkRegressionGate(cmp, { maxCostIncreasePct: o.gateCostRegression, maxLatencyIncreasePct: o.gateLatencyRegression })
+      : [];
+    if (cmp) console.log(`\n${formatComparison(cmp, regressionChecks)}`);
     if (o.markdown) await writeFile(o.markdown, formatMarkdown(report, cmp));
     if (o.otelExport) await writeOtelExport(report, o.otelExport);
     console.log(`\nReport: ${file}`);
@@ -105,7 +119,7 @@ program
       console.log(`Uploaded: ${uploaded.url}`);
     }
 
-    if (!report.gate.passed || cmp?.verdict === "regressed") process.exitCode = EXIT_GATE_FAILED;
+    if (!report.gate.passed || cmp?.verdict === "regressed" || regressionChecks.some((c) => !c.passed)) process.exitCode = EXIT_GATE_FAILED;
   });
 
 program
@@ -179,10 +193,12 @@ program
       : { command: cmd!, args, cwd: relative(outDir, process.cwd()) || "." };
     const session = await openSession(o.url ? { url: o.url, headers: {} } : { command: cmd!, args, cwd: process.cwd(), env: {} });
     try {
-      await writeFile(o.out, generateSuite(o.name, server, session.tools));
+      const result = generateSuite(o.name, server, session.tools);
+      await writeFile(o.out, result.yaml);
       console.log(`Wrote ${o.out}: ${session.tools.length} tool task(s) + 1 control task.`);
+      console.log(formatGenerationSummary(result));
       console.log(formatLint(lintTools(session.tools), session.tools.length));
-      console.log(`\nNext: replace the TODO prompts and rubrics, then: toolgrade run ${o.out}`);
+      console.log(`\nNext: review the generated prompts/assertions (and replace any remaining TODOs), then: toolgrade run ${o.out}`);
     } finally {
       await session.close();
     }
