@@ -5,14 +5,17 @@ import { Command, InvalidArgumentError } from "commander";
 import { compareRuns } from "./compare.js";
 import { loadSuite } from "./config.js";
 import { fingerprintSurface } from "./fingerprint.js";
+import { writeOtelExport } from "./export/otel.js";
+import { detectClientConfigs, parseClientConfig, scaffoldSuiteFromImport, type ClientName } from "./import-config.js";
 import { generateSuite, type InitServer } from "./init.js";
-import { lintToolDescriptions, lintTools } from "./lint.js";
+import { lintSpecCompliance, lintToolDescriptions, lintTools, lintToolSafety } from "./lint.js";
 import { openSession } from "./mcp.js";
 import { AnthropicProvider } from "./providers/anthropic.js";
 import { OpenAICompatibleProvider } from "./providers/openai.js";
 import type { ModelProvider } from "./providers/types.js";
 import { formatComparison, formatLint, formatMarkdown, formatTerminal } from "./report.js";
 import { runSuite, type RunReport } from "./runner.js";
+import { lintSuiteValidity } from "./suite-lint.js";
 import { detectGitMeta, fetchBaseline, uploadReport } from "./upload.js";
 
 const EXIT_GATE_FAILED = 1;
@@ -39,6 +42,7 @@ program
   .option("--no-baseline", "skip the no-tool baseline arm")
   .option("-o, --out-dir <dir>", "where run reports are written", ".toolgrade/runs")
   .option("--markdown <file>", "also write a Markdown summary (for PR comments)")
+  .option("--otel-export <file>", "also write the run as OTel GenAI spans, OTLP/JSON wire format (for Jaeger/Langfuse/Phoenix)")
   .option("--compare <report>", "compare against a previous run report; regression fails the run")
   .option("--baseline <url>", "compare against the most recent matching run on a ToolGrade platform instead of --compare (key from TOOLGRADE_API_KEY)")
   .option("--baseline-branch <branch>", "only match a baseline from this branch (default: the PR base branch in GitHub Actions, otherwise any branch)")
@@ -94,6 +98,7 @@ program
     const cmp = previous ? compareRuns(previous, report) : undefined;
     if (cmp) console.log(`\n${formatComparison(cmp)}`);
     if (o.markdown) await writeFile(o.markdown, formatMarkdown(report, cmp));
+    if (o.otelExport) await writeOtelExport(report, o.otelExport);
     console.log(`\nReport: ${file}`);
     if (o.upload) {
       const uploaded = await uploadReport(o.upload, apiKey!, report, await detectGitMeta());
@@ -125,6 +130,30 @@ program
           for (const issue of r.issues) console.log(`    ⚠ ${issue}`);
         }
       }
+      // Safety / destructive-action findings
+      const safetyFindings = lintToolSafety(session.tools);
+      if (safetyFindings.length > 0) {
+        console.log("\nSafety findings:");
+        for (const f of safetyFindings) {
+          const tag = f.severity === "danger" ? "danger" : f.severity === "warn" ? "warn  " : "info  ";
+          console.log(`  ${tag} ${f.toolName}: ${f.message}`);
+        }
+      }
+
+      // Spec compliance score
+      const { results: complianceResults, compliancePercent } = lintSpecCompliance(session.tools);
+      console.log(`\nMCP spec compliance: ${compliancePercent}%`);
+      for (const r of complianceResults) {
+        if (!r.compliant) console.log(`  ${r.toolName}: missing ${r.missing.join(", ")}`);
+      }
+
+      // Suite task-design validity (same suite the server was loaded from, since tasks are required)
+      const suiteFindings = lintSuiteValidity(suite);
+      if (suiteFindings.length > 0) {
+        console.log("\nSuite validity findings:");
+        for (const f of suiteFindings) console.log(`  ${f.severity === "warn" ? "warn  " : "info  "} ${f.taskId}: ${f.message}`);
+      }
+
       console.log(`\nTool surface fingerprint: ${fingerprintSurface(session.tools)}`);
       if (issues.some((i) => i.level === "error")) process.exitCode = EXIT_GATE_FAILED;
     } finally {
@@ -157,6 +186,56 @@ program
     } finally {
       await session.close();
     }
+  });
+
+const CLIENT_NAMES: ClientName[] = ["claude-desktop", "claude-code", "cursor", "vscode"];
+
+program
+  .command("import")
+  .description("scaffold a suite from an MCP server already configured in an AI client (e.g. toolgrade import --from cursor)")
+  .option("--from <client>", `client to read config from (${CLIENT_NAMES.join(", ")})`)
+  .option("--path <file>", "explicit config file path (overrides the client's default location)")
+  .option("--server <name>", "server name to import, when the config has more than one")
+  .option("-o, --out <file>", "suite file to write", "toolgrade.yaml")
+  .option("--name <name>", "suite name", basename(process.cwd()))
+  .option("--force", "overwrite an existing suite file")
+  .option("--detect", "just report which client configs exist on this machine, and exit")
+  .action(async (o) => {
+    if (o.detect) {
+      const found = await detectClientConfigs();
+      if (found.length === 0) {
+        console.log("No known MCP client configs found on this machine.");
+        return;
+      }
+      console.log("Found MCP client configs:");
+      for (const f of found) console.log(`  ${f.client}: ${f.path}`);
+      return;
+    }
+    if (!o.from) throw new InvalidArgumentError(`--from is required (one of: ${CLIENT_NAMES.join(", ")}), or pass --detect`);
+    if (!CLIENT_NAMES.includes(o.from)) throw new InvalidArgumentError(`unknown --from "${o.from}" (use: ${CLIENT_NAMES.join(", ")})`);
+    if (!o.force && (await exists(o.out))) throw new InvalidArgumentError(`${o.out} exists; pass --force to overwrite`);
+
+    const servers = await parseClientConfig(o.from as ClientName, o.path);
+    let server = servers[0];
+    if (servers.length > 1) {
+      if (!o.server) {
+        console.error(`${o.from} has ${servers.length} configured servers; re-run with --server <name>:`);
+        for (const s of servers) console.error(`  - ${s.name}`);
+        process.exitCode = EXIT_USAGE;
+        return;
+      }
+      const match = servers.find((s) => s.name === o.server);
+      if (!match) throw new InvalidArgumentError(`no server named "${o.server}" in ${o.from} config (found: ${servers.map((s) => s.name).join(", ")})`);
+      server = match;
+    } else if (o.server && servers[0]?.name !== o.server) {
+      throw new InvalidArgumentError(`no server named "${o.server}" in ${o.from} config (found: ${servers.map((s) => s.name).join(", ")})`);
+    }
+    if (!server) throw new Error(`${o.from} config defines no importable servers`);
+
+    await scaffoldSuiteFromImport(server, o.out, o.name);
+    console.log(`Imported "${server.name}" from ${o.from} (${server.command} ${server.args.join(" ")})`.trimEnd());
+    console.log(`Wrote ${o.out}`);
+    console.log(`\nNext: replace the TODO prompts and rubrics, then: toolgrade run ${o.out}`);
   });
 
 program
