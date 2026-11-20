@@ -1,12 +1,12 @@
 {
   "name": "toolgrade",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Eval-first quality gates for MCP servers: measure whether your tools make agents better than a no-tool baseline.",
   "type": "module",
   "license": "MIT",
   "packageManager": "pnpm@12.6.0",
   "bin": {
-    "toolgrade": "./dist/cli.js"
+    "toolgrade": "dist/cli.js"
   },
   "exports": {
     ".": {
